@@ -1,0 +1,8 @@
+export const TOURISM_CATEGORIES = [
+  "HERITAGE",
+  "HIGHLAND",
+  "CAVERN",
+  "AQUATICS",
+  "CULTURE",
+  "MODERN",
+];
