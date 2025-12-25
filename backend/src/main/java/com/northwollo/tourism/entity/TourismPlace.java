@@ -36,7 +36,7 @@ public class TourismPlace extends BaseEntity {
     private String description;
 
     @NotBlank
-    private String wereda;
+    private String woreda;
 
     @NotBlank
     private String kebele;
