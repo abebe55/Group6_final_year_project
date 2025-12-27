@@ -2,7 +2,6 @@ package com.northwollo.tourism.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-
 @MappedSuperclass
 public abstract class BaseEntity {
 
@@ -17,15 +16,33 @@ public abstract class BaseEntity {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;   // ✅ important
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
+
+    // ================= GETTERS =================
 
     public Long getId() {
         return id;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    // ================= SETTERS =================
+
+    protected void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

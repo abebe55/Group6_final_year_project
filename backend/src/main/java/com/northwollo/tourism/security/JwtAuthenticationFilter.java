@@ -1,39 +1,48 @@
 package com.northwollo.tourism.security;
 
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.*;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails; // ✅ Add this import
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
-    private final CustomUserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain chain) throws java.io.IOException, jakarta.servlet.ServletException {
+            FilterChain chain
+    ) throws ServletException, IOException {
 
-        String header = request.getHeader("Authorization");
+        try {
+            String bearerToken = request.getHeader("Authorization");
+            String token = tokenProvider.resolveToken(bearerToken);
 
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-            String username = tokenProvider.getUsername(token);
+            if (token != null && tokenProvider.validateToken(token)) {
+                UsernamePasswordAuthenticationToken authentication =
+                        tokenProvider.getAuthentication(token);
 
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request)
+                );
 
-            SecurityContextHolder.getContext().setAuthentication(auth);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+        } catch (RuntimeException ex) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, ex.getMessage());
+            return;
         }
 
         chain.doFilter(request, response);

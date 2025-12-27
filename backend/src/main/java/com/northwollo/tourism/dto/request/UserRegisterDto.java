@@ -14,14 +14,17 @@ import lombok.Setter;
 @AllArgsConstructor
 public class UserRegisterDto {
 
-    @NotBlank
+    @NotBlank(message = "Username is required")
     @Size(min = 3, max = 50)
     private String username;
 
-    @NotBlank
+    @NotBlank(message = "Password is required")
     @Size(min = 8, message = "Password must be at least 8 characters")
     private String password;
 
-    @Email
+    @Email(message = "Invalid email format")
     private String email;
+
+    @NotBlank(message = "Full name is required")
+    private String fullName;   // ✅ REQUIRED because User.fullName is @NotBlank
 }
