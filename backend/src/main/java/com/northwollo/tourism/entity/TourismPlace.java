@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,7 +36,7 @@ public class TourismPlace extends BaseEntity {
     private String description;
 
     @NotBlank
-    private String woreda;
+    private String wereda;
 
     @NotBlank
     private String kebele;
@@ -49,7 +49,7 @@ public class TourismPlace extends BaseEntity {
     private Duration visitTime;
 
     @ElementCollection
-    private List<String> languages;
+    private List<String> languages = new ArrayList<>();
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -57,6 +57,10 @@ public class TourismPlace extends BaseEntity {
 
     private int viewersCount = 0;
 
-    // ✅ Added field for image URL to match DTO
+    // Single main image URL
     private String imageUrl;
+
+    // Relationship with TourismImage
+    @OneToMany(mappedBy = "tourismPlace", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TourismImage> images = new ArrayList<>();
 }

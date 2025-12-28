@@ -1,49 +1,33 @@
 package com.northwollo.tourism.controller;
 
-import com.northwollo.tourism.dto.request.TourismCreateDto;
-import com.northwollo.tourism.dto.request.TourismUpdateDto;
+import com.northwollo.tourism.dto.response.HotelSummaryDto;
+import com.northwollo.tourism.dto.response.TourismImageDto;
+import com.northwollo.tourism.service.HotelService;
 import com.northwollo.tourism.service.TourismService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/tourism")
+@RequestMapping("/api/tourisms")
 @RequiredArgsConstructor
 public class TourismController {
 
+    private final HotelService hotelService;
     private final TourismService tourismService;
 
-    @PostMapping
-    public ResponseEntity<Long> create(
-            @Valid @RequestBody TourismCreateDto dto) {
-        return ResponseEntity.ok(tourismService.create(dto));
+    @GetMapping("/{id}/hotels")
+    public ResponseEntity<List<HotelSummaryDto>> getHotelsByTourism(@PathVariable Long id) {
+        List<HotelSummaryDto> hotels = hotelService.getHotels(id);
+        return ResponseEntity.ok(hotels);
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<Void> update(
-            @PathVariable Long id,
-            @Valid @RequestBody TourismUpdateDto dto) {
-        tourismService.update(id, dto);
-        return ResponseEntity.ok().build();
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        tourismService.delete(id);
-        return ResponseEntity.ok().build();
-    }
-
-    @PatchMapping("/{id}/block")
-    public ResponseEntity<Void> block(@PathVariable Long id) {
-        tourismService.block(id);
-        return ResponseEntity.ok().build();
-    }
-
-    @PatchMapping("/{id}/unblock")
-    public ResponseEntity<Void> unblock(@PathVariable Long id) {
-        tourismService.unblock(id);
-        return ResponseEntity.ok().build();
+    // Public endpoint to get tourism images (for detail page gallery)
+    @GetMapping("/{id}/images")
+    public ResponseEntity<List<TourismImageDto>> getTourismImages(@PathVariable Long id) {
+        List<TourismImageDto> images = tourismService.getImages(id);
+        return ResponseEntity.ok(images);
     }
 }

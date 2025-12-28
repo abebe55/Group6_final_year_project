@@ -19,8 +19,8 @@ import java.time.LocalDateTime;
 public class PasswordResetToken extends BaseEntity {
 
     @NotBlank
-    @Column(nullable = false, unique = true, length = 255)
-    private String token;
+    @Column(nullable = false, length = 6)
+    private String token; // 6-digit OTP
 
     @NotNull
     @Column(nullable = false)
@@ -32,6 +32,9 @@ public class PasswordResetToken extends BaseEntity {
 
     @Column(nullable = false)
     private boolean used = false;
+
+    @Column(nullable = false)
+    private int attemptCount = 0; // Track failed verification attempts
 
     @Column(length = 45)
     private String ipAddress;
@@ -45,6 +48,7 @@ public class PasswordResetToken extends BaseEntity {
         this.userId = userId;
         this.expiresAt = expiresAt;
         this.used = false;
+        this.attemptCount = 0;
     }
 
     // Helper methods
@@ -58,5 +62,9 @@ public class PasswordResetToken extends BaseEntity {
 
     public void markAsUsed() {
         this.used = true;
+    }
+
+    public void incrementAttemptCount() {
+        this.attemptCount++;
     }
 }

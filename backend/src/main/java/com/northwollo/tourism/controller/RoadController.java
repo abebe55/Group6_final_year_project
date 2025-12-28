@@ -25,6 +25,12 @@ public class RoadController {
         return ResponseEntity.ok(roadService.getRoadsByTourismPlace(tourismPlaceId));
     }
 
+    // ✅ PUBLIC: Get road by ID (for frontend road detail page)
+    @GetMapping("/roads/{id}")
+    public ResponseEntity<RoadInfoDto> getPublicRoadById(@PathVariable Long id) {
+        return ResponseEntity.ok(roadService.getRoadById(id));
+    }
+
     // ✅ ADMIN: CRUD Operations
     @PostMapping("/admin/roads")
     @PreAuthorize("hasRole('ADMIN')")

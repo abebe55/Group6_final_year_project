@@ -8,6 +8,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,6 +29,12 @@ public class HotelCreateDto {
     @NotBlank(message = "Contact info is required")
     private String contactInfo;
 
-    private String bookingSteps;
-    private String policies;
+    private String policies;     // ✅ Optional TEXT
+
+    private String description;  // ✅ Optional TEXT
+
+    // ✅ NEW: Image support for creation
+    private List<String> images = new ArrayList<>();  // Gallery images
+
+    private String mainImageUrl;  // Main display image (optional)
 }
