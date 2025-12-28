@@ -18,8 +18,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/tourisms")  // ✅ FIXED: /api/tourisms/**
-@CrossOrigin(origins = "*")  // ✅ Frontend CORS
+@RequestMapping("/api/tourisms")
 @RequiredArgsConstructor
 public class PublicTourismController {
 

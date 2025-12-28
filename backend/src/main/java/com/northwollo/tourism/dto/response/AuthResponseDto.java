@@ -14,6 +14,7 @@ public class AuthResponseDto {
     private String refreshToken;
     private String tokenType = "Bearer";
     private long expiresIn; // Access token expiry in seconds
+    private Long userId; // User ID for frontend use
 
     // Backward compatibility constructor
     public AuthResponseDto(String token) {
@@ -21,7 +22,16 @@ public class AuthResponseDto {
         this.tokenType = "Bearer";
     }
 
-    // Full constructor
+    // Full constructor with userId
+    public AuthResponseDto(String token, String refreshToken, long expiresIn, Long userId) {
+        this.token = token;
+        this.refreshToken = refreshToken;
+        this.tokenType = "Bearer";
+        this.expiresIn = expiresIn;
+        this.userId = userId;
+    }
+    
+    // Constructor without userId (backward compatibility)
     public AuthResponseDto(String token, String refreshToken, long expiresIn) {
         this.token = token;
         this.refreshToken = refreshToken;

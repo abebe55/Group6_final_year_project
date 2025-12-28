@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "road_infos")
 @Data
@@ -33,6 +36,6 @@ public class RoadInfo extends BaseEntity {
     private Double distanceByHorse;
     private Double totalDistance;
 
-    @OneToOne(mappedBy = "roadInfo", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private HorseService horseService;
+    @OneToMany(mappedBy = "roadInfo", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<HorseService> horseServices = new ArrayList<>();
 }

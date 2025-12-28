@@ -67,7 +67,7 @@ public class HotelBooking extends BaseEntity {
     private String problemReport;
 
     @Column(name = "problem_reported")
-    private boolean problemReported = false;
+    private Boolean problemReported = false;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "status_id", nullable = false)
