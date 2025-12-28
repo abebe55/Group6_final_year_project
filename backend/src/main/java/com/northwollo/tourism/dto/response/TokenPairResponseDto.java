@@ -9,23 +9,17 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthResponseDto {
-    private String token;
+public class TokenPairResponseDto {
+
+    private String accessToken;
     private String refreshToken;
     private String tokenType = "Bearer";
     private long expiresIn; // Access token expiry in seconds
 
-    // Backward compatibility constructor
-    public AuthResponseDto(String token) {
-        this.token = token;
-        this.tokenType = "Bearer";
-    }
-
-    // Full constructor
-    public AuthResponseDto(String token, String refreshToken, long expiresIn) {
-        this.token = token;
+    public TokenPairResponseDto(String accessToken, String refreshToken, long expiresIn) {
+        this.accessToken = accessToken;
         this.refreshToken = refreshToken;
-        this.tokenType = "Bearer";
         this.expiresIn = expiresIn;
+        this.tokenType = "Bearer";
     }
 }

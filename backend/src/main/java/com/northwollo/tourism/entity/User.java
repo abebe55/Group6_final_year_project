@@ -8,7 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import java.time.LocalDateTime;
 import java.util.Set;
 
 @Entity
@@ -33,7 +33,18 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String email;
 
+    @NotBlank
+    @Column(nullable = false)
+    private String fullName; // ✅ add this field
+
     private boolean active = true;
+
+    // Email verification fields
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
+    @Column
+    private LocalDateTime emailVerifiedAt;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
