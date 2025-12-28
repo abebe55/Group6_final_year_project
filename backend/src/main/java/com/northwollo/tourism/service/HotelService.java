@@ -18,6 +18,12 @@ public interface HotelService {
     Hotel detail(Long id);
     HotelDetailInfoDto getHotelDetailInfo(Long hotelId);
     List<HotelSummaryDto> getHotels(Long tourismPlaceId);
+    
+    // Admin: Get all hotels
+    List<HotelDetailInfoDto> getAllHotelsForAdmin();
+
+    // Owner: Get hotels by owner
+    List<HotelDetailInfoDto> getHotelsByOwner(Long ownerId);
 
     // Image management
     void addHotelImages(Long hotelId, List<String> images, String mainImageUrl);

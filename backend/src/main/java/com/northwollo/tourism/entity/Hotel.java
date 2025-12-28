@@ -22,6 +22,11 @@ public class Hotel extends BaseEntity {
     @JoinColumn(name = "tourism_place_id")
     private TourismPlace tourismPlace;
 
+    // Hotel Owner - the user who owns this hotel
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
     @NotBlank
     private String name;
 
@@ -37,6 +42,10 @@ public class Hotel extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    // Hotel active status
+    @Column(nullable = false)
+    private boolean active = true;
 
     // ✅ Images relationship - bidirectional with HotelImage
     @OneToMany(mappedBy = "hotel", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

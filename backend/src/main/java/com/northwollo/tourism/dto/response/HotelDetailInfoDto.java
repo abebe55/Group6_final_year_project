@@ -14,4 +14,13 @@ public class HotelDetailInfoDto {
     private List<String> images;
     private Double averageRating;
     private List<HotelRatingResponseDto> ratings;
+    
+    // Owner information
+    private Long ownerId;
+    private String ownerName;
+    private boolean active;
+    
+    // Tourism place info
+    private Long tourismPlaceId;
+    private String tourismPlaceName;
 }

@@ -18,4 +18,11 @@ public interface HotelRepository extends JpaRepository<Hotel, Long> {
     @Query("SELECT h FROM Hotel h LEFT JOIN FETCH h.images WHERE h.id = :hotelId")
     Optional<Hotel> findByIdWithImages(@Param("hotelId") Long hotelId);
 
+    // 🔹 Find hotels by owner ID
+    List<Hotel> findByOwnerId(Long ownerId);
+
+    // 🔹 Find hotels by owner ID with images
+    @Query("SELECT DISTINCT h FROM Hotel h LEFT JOIN FETCH h.images WHERE h.owner.id = :ownerId")
+    List<Hotel> findByOwnerIdWithImages(@Param("ownerId") Long ownerId);
+
 }

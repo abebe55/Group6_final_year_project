@@ -115,6 +115,19 @@ public class HotelServiceImpl implements HotelService {
         dto.setStars(hotel.getStarRating());
         dto.setContactInfo(hotel.getContactInfo());
         dto.setPolicies(hotel.getPolicies());
+        dto.setActive(hotel.isActive());
+
+        // Owner information
+        if (hotel.getOwner() != null) {
+            dto.setOwnerId(hotel.getOwner().getId());
+            dto.setOwnerName(hotel.getOwner().getFullName());
+        }
+
+        // Tourism place info
+        if (hotel.getTourismPlace() != null) {
+            dto.setTourismPlaceId(hotel.getTourismPlace().getId());
+            dto.setTourismPlaceName(hotel.getTourismPlace().getName());
+        }
 
         List<String> images = List.of();
         if (hotel.getImages() != null && !hotel.getImages().isEmpty()) {
@@ -142,6 +155,24 @@ public class HotelServiceImpl implements HotelService {
                 .stream()
                 .limit(3)
                 .map(this::toHotelSummary)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HotelDetailInfoDto> getAllHotelsForAdmin() {
+        return hotelRepository.findAll()
+                .stream()
+                .map(this::mapToDetailDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HotelDetailInfoDto> getHotelsByOwner(Long ownerId) {
+        return hotelRepository.findByOwnerIdWithImages(ownerId)
+                .stream()
+                .map(this::mapToDetailDto)
                 .collect(Collectors.toList());
     }
 
