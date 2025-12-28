@@ -8,6 +8,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "hotels")
 @Getter
@@ -15,9 +18,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Hotel extends BaseEntity {
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tourism_place_id")
     private TourismPlace tourismPlace;
+
+    // Hotel Owner - the user who owns this hotel
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
 
     @NotBlank
     private String name;
@@ -30,8 +38,27 @@ public class Hotel extends BaseEntity {
     private String contactInfo;
 
     @Column(columnDefinition = "TEXT")
-    private String bookingSteps;
+    private String policies;
 
     @Column(columnDefinition = "TEXT")
-    private String policies;
+    private String description;
+
+    // Hotel active status
+    @Column(nullable = false)
+    private boolean active = true;
+
+    // ✅ Images relationship - bidirectional with HotelImage
+    @OneToMany(mappedBy = "hotel", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<HotelImage> images = new ArrayList<>();
+
+    // ✅ Helper methods for images
+    public void addImage(HotelImage image) {
+        images.add(image);
+        image.setHotel(this);
+    }
+
+    public void removeImage(HotelImage image) {
+        images.remove(image);
+        image.setHotel(null);
+    }
 }

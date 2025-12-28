@@ -19,7 +19,7 @@ public class EmailVerificationController {
     private final EmailVerificationService emailVerificationService;
 
     /**
-     * Send email verification
+     * Send email verification OTP
      */
     @PostMapping("/send-verification")
     public ResponseEntity<EmailVerificationResponseDto> sendVerificationEmail(
@@ -29,14 +29,14 @@ public class EmailVerificationController {
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         
-        log.info("Email verification requested for email: {} from IP: {}", request.getEmail(), ipAddress);
+        log.info("Email verification OTP requested for email: {} from IP: {}", request.getEmail(), ipAddress);
         
         EmailVerificationResponseDto response = emailVerificationService.sendVerificationEmail(request, ipAddress, userAgent);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Verify email with token
+     * Verify email with OTP (legacy - OTP only)
      */
     @PostMapping("/verify-email")
     public ResponseEntity<EmailVerificationResponseDto> verifyEmail(
@@ -46,14 +46,32 @@ public class EmailVerificationController {
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         
-        log.info("Email verification attempted from IP: {}", ipAddress);
+        log.info("Email verification OTP attempted from IP: {}", ipAddress);
         
         EmailVerificationResponseDto response = emailVerificationService.verifyEmail(token, ipAddress, userAgent);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Resend verification email for authenticated user
+     * Verify email with OTP and email address (recommended)
+     */
+    @PostMapping("/verify-email-otp")
+    public ResponseEntity<EmailVerificationResponseDto> verifyEmailWithOtp(
+            @RequestParam String email,
+            @RequestParam String otp,
+            HttpServletRequest httpRequest) {
+        
+        String ipAddress = getClientIpAddress(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        
+        log.info("Email verification OTP attempted for {} from IP: {}", email, ipAddress);
+        
+        EmailVerificationResponseDto response = emailVerificationService.verifyEmailWithEmail(email, otp, ipAddress, userAgent);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Resend verification OTP for authenticated user
      */
     @PostMapping("/resend-verification")
     public ResponseEntity<EmailVerificationResponseDto> resendVerificationEmail(
@@ -63,23 +81,23 @@ public class EmailVerificationController {
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
         
-        log.info("Resend verification requested for user: {} from IP: {}", userId, ipAddress);
+        log.info("Resend verification OTP requested for user: {} from IP: {}", userId, ipAddress);
         
         EmailVerificationResponseDto response = emailVerificationService.resendVerificationEmail(userId, ipAddress, userAgent);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Validate verification token (for frontend validation)
+     * Validate verification OTP (for frontend validation)
      */
     @GetMapping("/verify-email/validate")
     public ResponseEntity<EmailVerificationResponseDto> validateVerificationToken(@RequestParam String token) {
         boolean isValid = emailVerificationService.isValidVerificationToken(token);
         
         if (isValid) {
-            return ResponseEntity.ok(EmailVerificationResponseDto.success("Token is valid"));
+            return ResponseEntity.ok(EmailVerificationResponseDto.success("OTP is valid"));
         } else {
-            return ResponseEntity.ok(EmailVerificationResponseDto.error("Invalid or expired token"));
+            return ResponseEntity.ok(EmailVerificationResponseDto.error("Invalid or expired OTP"));
         }
     }
 

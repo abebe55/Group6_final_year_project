@@ -5,7 +5,9 @@ import com.northwollo.tourism.dto.response.HotelBookingResponseDto;
 import com.northwollo.tourism.entity.*;
 import com.northwollo.tourism.repository.*;
 import com.northwollo.tourism.service.BookingService;
+import com.northwollo.tourism.service.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingServiceImpl implements BookingService {
 
     private final HotelBookingRepository bookingRepository;
@@ -23,6 +26,7 @@ public class BookingServiceImpl implements BookingService {
     private final UserRepository userRepository;
     private final BookingStatusRepository statusRepository;
     private final BookingMessageRepository messageRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -55,6 +59,23 @@ public class BookingServiceImpl implements BookingService {
 
         booking = bookingRepository.save(booking);
         addMessage(booking, user, "Booking request submitted", BookingMessage.MessageType.BOOKING_REQUEST);
+        
+        // Send email notification to hotel owner
+        if (hotel.getOwner() != null && hotel.getOwner().getEmail() != null) {
+            try {
+                emailService.sendNewBookingNotification(
+                    hotel.getOwner().getEmail(),
+                    user.getFullName(),
+                    hotel.getName(),
+                    dto.getCheckIn().toString(),
+                    dto.getCheckOut().toString(),
+                    dto.getNumberOfGuests()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send new booking notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -87,6 +108,21 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(paidStatus);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getUser(), "Receipt uploaded", BookingMessage.MessageType.RECEIPT_UPLOADED);
+        
+        // Send email notification to hotel owner
+        if (booking.getHotel().getOwner() != null && booking.getHotel().getOwner().getEmail() != null) {
+            try {
+                emailService.sendReceiptUploadedNotification(
+                    booking.getHotel().getOwner().getEmail(),
+                    booking.getUser().getFullName(),
+                    booking.getHotel().getName(),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send receipt uploaded notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -136,6 +172,21 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(status);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getHotel().getOwner(), "Request accepted", BookingMessage.MessageType.GENERAL);
+        
+        // Send email notification to client
+        String clientEmail = booking.getClientEmail() != null ? booking.getClientEmail() : booking.getUser().getEmail();
+        if (clientEmail != null) {
+            try {
+                emailService.sendBookingAcceptedNotification(
+                    clientEmail,
+                    booking.getHotel().getName(),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send booking accepted notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -151,6 +202,22 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(status);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getHotel().getOwner(), "Cost: $" + cost, BookingMessage.MessageType.COST_PROPOSAL);
+        
+        // Send email notification to client
+        String clientEmail = booking.getClientEmail() != null ? booking.getClientEmail() : booking.getUser().getEmail();
+        if (clientEmail != null) {
+            try {
+                emailService.sendCostProposedNotification(
+                    clientEmail,
+                    booking.getHotel().getName(),
+                    cost.toString(),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send cost proposed notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -165,6 +232,23 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(status);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getHotel().getOwner(), "APPROVED!", BookingMessage.MessageType.BOOKING_APPROVED);
+        
+        // Send email notification to client
+        String clientEmail = booking.getClientEmail() != null ? booking.getClientEmail() : booking.getUser().getEmail();
+        if (clientEmail != null) {
+            try {
+                emailService.sendBookingApprovedNotification(
+                    clientEmail,
+                    booking.getHotel().getName(),
+                    booking.getCheckIn().toString(),
+                    booking.getCheckOut().toString(),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send booking approved notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -178,6 +262,22 @@ public class BookingServiceImpl implements BookingService {
         booking.setRejectionReason(reason);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getHotel().getOwner(), "Rejected: " + reason, BookingMessage.MessageType.BOOKING_REJECTED);
+        
+        // Send email notification to client
+        String clientEmail = booking.getClientEmail() != null ? booking.getClientEmail() : booking.getUser().getEmail();
+        if (clientEmail != null) {
+            try {
+                emailService.sendBookingRejectedNotification(
+                    clientEmail,
+                    booking.getHotel().getName(),
+                    reason,
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send booking rejected notification email: {}", e.getMessage());
+            }
+        }
+        
         return mapToDto(booking);
     }
 
@@ -239,7 +339,7 @@ public class BookingServiceImpl implements BookingService {
                 .checkIn(b.getCheckIn()).checkOut(b.getCheckOut()).numberOfGuests(b.getNumberOfGuests())
                 .numberOfRooms(b.getNumberOfRooms()).specialRequests(b.getSpecialRequests())
                 .bookingStatus(b.getStatus().getName()).totalCost(b.getTotalCost()).receiptImageUrl(b.getReceiptImageUrl())
-                .rejectionReason(b.getRejectionReason()).problemReport(b.getProblemReport()).problemReported(b.isProblemReported())
+                .rejectionReason(b.getRejectionReason()).problemReport(b.getProblemReport()).problemReported(b.getProblemReported() != null && b.getProblemReported())
                 .createdAt(b.getCreatedAt()).updatedAt(b.getUpdatedAt()).messages(msgs).build();
     }
 }

@@ -16,10 +16,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Slf4j
 @RestController
+
+@RequestMapping("/api/tourisms")
 @RequestMapping("/api/tourisms")  // ✅ FIXED: /api/tourisms/**
 @CrossOrigin(origins = "*")  // ✅ Frontend CORS
+
 @RequiredArgsConstructor
 public class PublicTourismController {
 
