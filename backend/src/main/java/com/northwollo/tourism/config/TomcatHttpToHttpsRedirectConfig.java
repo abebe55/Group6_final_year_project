@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class TomcatHttpToHttpsRedirectConfig {
 
+
     @Bean
     public WebServerFactoryCustomizer<TomcatServletWebServerFactory> servletContainer() {
         return (factory) -> {
@@ -16,7 +17,7 @@ public class TomcatHttpToHttpsRedirectConfig {
             httpConnector.setScheme("http");
             httpConnector.setPort(8080);
             httpConnector.setSecure(false);
-            httpConnector.setRedirectPort(8443);
+
             factory.addAdditionalTomcatConnectors(httpConnector);
         };
     }

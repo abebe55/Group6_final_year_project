@@ -17,20 +17,16 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-
-@RequestMapping("/api/tourisms")
-@RequestMapping("/api/tourisms")  // ✅ FIXED: /api/tourisms/**
-@CrossOrigin(origins = "*")  // ✅ Frontend CORS
-
+@RequestMapping("/api/tourisms")  // ✅ Base path for tourism endpoints
+@CrossOrigin(origins = "*")      // ✅ Allow frontend access
 @RequiredArgsConstructor
 public class PublicTourismController {
 
     private final TourismService tourismService;
 
-
     /**
      * ✅ Detail page endpoint
-     * GET /api/tourisms/123 → TourismFullDetailDto
+     * GET /api/tourisms/{id} → TourismFullDetailDto
      */
     @GetMapping("/{id}")
     public ResponseEntity<TourismFullDetailDto> getDetail(@PathVariable Long id) {

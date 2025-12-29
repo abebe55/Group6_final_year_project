@@ -26,6 +26,9 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
+                // Enable CORS (uses CorsConfig bean)
+                .cors(cors -> {})
+                
                 // Disable CSRF (JWT based)
                 .csrf(csrf -> csrf.disable())
 

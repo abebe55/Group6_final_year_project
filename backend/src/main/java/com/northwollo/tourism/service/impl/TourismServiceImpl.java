@@ -54,9 +54,11 @@ public class TourismServiceImpl implements TourismService {
             place.setLanguages(Arrays.asList(dto.getLanguages().split(",")));
         }
 
-        // ✅ Visit time parsing
+
+        // ✅ Visit time parsing - try ISO-8601 format, or convert human-readable to duration
+
         if (dto.getVisitTime() != null && !dto.getVisitTime().isBlank()) {
-            place.setVisitTime(Duration.parse(dto.getVisitTime()));
+            place.setVisitTime(parseVisitTime(dto.getVisitTime()));
         }
 
         // ✅ Main image
@@ -88,10 +90,80 @@ public class TourismServiceImpl implements TourismService {
         if (dto.getLanguages() != null) place.setLanguages(dto.getLanguages());
         if (dto.getStatus() != null) place.setStatus(dto.getStatus());
 
-        // ✅ Visit time parsing with null check
+
+        // ✅ Visit time parsing - try ISO-8601 format, or convert human-readable to duration
+
+     
         if (dto.getVisitTime() != null && !dto.getVisitTime().isBlank()) {
-            place.setVisitTime(Duration.parse(dto.getVisitTime()));
+            place.setVisitTime(parseVisitTime(dto.getVisitTime()));
         }
+    }
+
+    /**
+     * Parse visit time from various formats:
+     * - ISO-8601: "PT2H30M" -> 2 hours 30 minutes
+     * - Human readable: "2 hours", "2-3 hours", "30 minutes" -> approximate Duration
+     */
+    private Duration parseVisitTime(String visitTime) {
+        if (visitTime == null || visitTime.isBlank()) {
+            return null;
+        }
+
+        
+        // Try ISO-8601 format first
+        try {
+            return Duration.parse(visitTime);
+        } catch (Exception e) {
+            // Parse human-readable format
+        }
+        
+        String lower = visitTime.toLowerCase().trim();
+        
+        // Extract numbers from the string
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)").matcher(lower);
+        int firstNumber = 0;
+        if (matcher.find()) {
+            firstNumber = Integer.parseInt(matcher.group(1));
+        }
+        
+        if (firstNumber == 0) {
+            return Duration.ofHours(2); // Default 2 hours
+        }
+        
+        // Determine unit
+        if (lower.contains("hour")) {
+            return Duration.ofHours(firstNumber);
+        } else if (lower.contains("minute") || lower.contains("min")) {
+            return Duration.ofMinutes(firstNumber);
+        } else if (lower.contains("day")) {
+            return Duration.ofDays(firstNumber);
+        } else {
+            // Assume hours if no unit specified
+            return Duration.ofHours(firstNumber);
+        }
+    }
+
+    /**
+     * Format Duration to human-readable string
+     */
+    private String formatDuration(Duration duration) {
+        if (duration == null) {
+            return null;
+        }
+        
+        long hours = duration.toHours();
+        long minutes = duration.toMinutesPart();
+        
+        if (hours > 0 && minutes > 0) {
+            return hours + " hours " + minutes + " minutes";
+        } else if (hours > 0) {
+            return hours + (hours == 1 ? " hour" : " hours");
+        } else if (minutes > 0) {
+            return minutes + (minutes == 1 ? " minute" : " minutes");
+        } else {
+            return "Less than a minute";
+        }
+
     }
 
     @Override
@@ -119,6 +191,170 @@ public class TourismServiceImpl implements TourismService {
                 .stream()
                 .map(TourismAdminDto::fromEntity)
                 .collect(Collectors.toList());
+
+    }
+
+
+    @Override
+    @Transactional
+    public TourismFullDetailDto getFullDetail(Long placeId) {
+        TourismPlace place = tourismRepository.findById(placeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tourism place not found: " + placeId));
+
+        // ✅ Atomic viewer increment
+        tourismRepository.incrementViewersCount(placeId);
+
+        // ✅ Build full DTO (same as before...)
+        TourismFullDetailDto dto = new TourismFullDetailDto();
+        dto.setId(place.getId());
+        dto.setName(place.getName());
+        dto.setDescription(place.getDescription());
+        dto.setWereda(place.getWereda());
+        dto.setKebele(place.getKebele());
+        dto.setBestTime(place.getBestTime());
+        dto.setPeaceInfo(place.getPeaceInfo());
+        dto.setVisitTime(formatDuration(place.getVisitTime()));
+        dto.setLanguages(place.getLanguages());
+        dto.setViewersCount(place.getViewersCount());
+
+
+        // ✅ Images
+        dto.setImages(place.getImages().stream()
+                .map(TourismImage::getImageUrl)
+                .collect(Collectors.toList()));
+
+        // ✅ FIXED: Use new nearby method + limit 5 in service
+        dto.setNearbyPlaces(tourismRepository.findNearbyByKebeleAndIdNotAndStatus(
+                        place.getKebele(), place.getId(), PlaceStatus.ACTIVE)
+                .stream()
+                .limit(5)  // ✅ Service layer limit
+                .map(NearbyTourismDto::fromEntity)
+                .collect(Collectors.toList()));
+
+        // ✅ Ratings (same)
+        List<TourismRating> ratings = ratingRepository.findByTourismPlaceId(placeId);
+        List<TourismRatingResponseDto> ratingDtos = ratings.stream()
+                .map(TourismRatingResponseDto::fromEntity)
+                .collect(Collectors.toList());
+        dto.setRatings(ratingDtos);
+
+        double avgRating = ratings.isEmpty() ? 0.0 :
+                ratings.stream().mapToInt(TourismRating::getRating).average().orElse(0.0);
+        dto.setRatingSummary(new RatingSummaryResponseDto(avgRating, (long) ratings.size()));
+
+        return dto;
+    }
+
+    // ==============================
+    // Image Management Methods
+    // ==============================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TourismImageDto> getImages(Long tourismId) {
+        if (!tourismRepository.existsById(tourismId)) {
+            throw new ResourceNotFoundException("Tourism place not found: " + tourismId);
+        }
+        return tourismImageRepository.findByTourismPlaceIdOrderByDisplayOrderAsc(tourismId)
+                .stream()
+                .map(TourismImageDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public TourismImageDto addImage(Long tourismId, TourismImageCreateDto dto) {
+        TourismPlace place = tourismRepository.findById(tourismId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tourism place not found: " + tourismId));
+
+        TourismImage image = new TourismImage();
+        image.setImageUrl(dto.getImageUrl());
+        image.setTitle(dto.getTitle());
+        image.setDescription(dto.getDescription());
+        image.setTourismPlace(place);
+
+        // If this is set as main, clear other main images
+        if (dto.isMain()) {
+            tourismImageRepository.clearMainImage(tourismId);
+            image.setMain(true);
+        }
+
+        // Set display order
+        if (dto.getDisplayOrder() > 0) {
+            image.setDisplayOrder(dto.getDisplayOrder());
+        } else {
+            image.setDisplayOrder(tourismImageRepository.getMaxDisplayOrder(tourismId) + 1);
+        }
+
+        TourismImage saved = tourismImageRepository.save(image);
+        return TourismImageDto.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public TourismImageDto updateImage(Long tourismId, Long imageId, TourismImageCreateDto dto) {
+        TourismImage image = tourismImageRepository.findByIdAndTourismPlaceId(imageId, tourismId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+
+        if (dto.getImageUrl() != null && !dto.getImageUrl().isBlank()) {
+            image.setImageUrl(dto.getImageUrl());
+        }
+        if (dto.getTitle() != null) {
+            image.setTitle(dto.getTitle());
+        }
+        if (dto.getDescription() != null) {
+            image.setDescription(dto.getDescription());
+        }
+        if (dto.getDisplayOrder() > 0) {
+            image.setDisplayOrder(dto.getDisplayOrder());
+        }
+
+        // Handle main image change
+        if (dto.isMain() && !image.isMain()) {
+            tourismImageRepository.clearMainImage(tourismId);
+            image.setMain(true);
+        }
+
+        TourismImage saved = tourismImageRepository.save(image);
+        return TourismImageDto.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteImage(Long tourismId, Long imageId) {
+        TourismImage image = tourismImageRepository.findByIdAndTourismPlaceId(imageId, tourismId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+
+        tourismImageRepository.delete(image);
+    }
+
+    @Override
+    @Transactional
+    public void setMainImage(Long tourismId, Long imageId) {
+        TourismImage image = tourismImageRepository.findByIdAndTourismPlaceId(imageId, tourismId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+
+        tourismImageRepository.clearMainImage(tourismId);
+        image.setMain(true);
+        tourismImageRepository.save(image);
+    }
+
+    @Override
+    @Transactional
+    public void reorderImages(Long tourismId, List<Long> imageIds) {
+        if (!tourismRepository.existsById(tourismId)) {
+            throw new ResourceNotFoundException("Tourism place not found: " + tourismId);
+        }
+
+        for (int i = 0; i < imageIds.size(); i++) {
+            TourismImage image = tourismImageRepository.findByIdAndTourismPlaceId(imageIds.get(i), tourismId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Image not found"));
+            image.setDisplayOrder(i + 1);
+            tourismImageRepository.save(image);
+        }
+    }
+
+
     }
 
 
