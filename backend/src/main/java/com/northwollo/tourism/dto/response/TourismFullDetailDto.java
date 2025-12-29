@@ -2,6 +2,8 @@ package com.northwollo.tourism.dto.response;
 
 import lombok.Data;
 
+
+
 import java.util.List;
 
 @Data
@@ -14,7 +16,9 @@ public class TourismFullDetailDto {
     private String kebele;
     private String bestTime;
     private String peaceInfo;
+
     private String visitTime; // Human-readable format
+
 
     // ✅ FIXED: must be List<String>, not String
     private List<String> languages;

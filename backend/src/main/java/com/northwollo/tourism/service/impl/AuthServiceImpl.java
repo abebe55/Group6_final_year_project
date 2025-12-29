@@ -195,6 +195,7 @@ public class AuthServiceImpl implements AuthService {
             log.info("Checking if email exists...");
             if (userRepository.existsByEmail(dto.getEmail())) {
                 throw new BadRequestException("Email already exists");
+
             }
             log.info("Email is available");
 

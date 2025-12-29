@@ -16,18 +16,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@Slf4j
 @RestController
-@RequestMapping("/api/tourisms")
+@RequestMapping("/api/tourisms")  // ✅ Base path for tourism endpoints
+@CrossOrigin(origins = "*")      // ✅ Allow frontend access
 @RequiredArgsConstructor
 public class PublicTourismController {
 
     private final TourismService tourismService;
 
-
     /**
      * ✅ Detail page endpoint
-     * GET /api/tourisms/123 → TourismFullDetailDto
+     * GET /api/tourisms/{id} → TourismFullDetailDto
      */
     @GetMapping("/{id}")
     public ResponseEntity<TourismFullDetailDto> getDetail(@PathVariable Long id) {
