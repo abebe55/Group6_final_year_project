@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --glass-bg: rgba(15, 23, 42, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --card-bg: rgba(30, 41, 59, 0.85);
+}
+
+body {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  color: var(--foreground);
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+/* Night mode frosted glass effect */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-panel {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Override white backgrounds to dark */
+.bg-white {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+.bg-gray-50 {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+}
+
+.bg-gray-100 {
+  background-color: rgba(30, 41, 59, 0.8) !important;
+}
+
+/* Text colors for night mode */
+.text-gray-900 {
+  color: #f1f5f9 !important;
+}
+
+.text-gray-800 {
+  color: #e2e8f0 !important;
+}
+
+.text-gray-700 {
+  color: #cbd5e1 !important;
+}
+
+.text-gray-600 {
+  color: #94a3b8 !important;
+}
+
+.text-gray-500 {
+  color: #64748b !important;
+}
+
+/* Border colors */
+.border-gray-200, .border-gray-300 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.divide-gray-200 > * + * {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Softer night shadows */
+.shadow-md {
+  box-shadow: 0 4px 20px -3px rgba(0, 0, 0, 0.4), 0 2px 8px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 4px 12px -5px rgba(0, 0, 0, 0.4) !important;
+}
+
+.shadow-xl {
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.6), 0 8px 20px -8px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Input styling for night mode */
+input, textarea, select {
+  background-color: rgba(15, 23, 42, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #e2e8f0 !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #64748b !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Hover states */
+.hover\:bg-gray-50:hover {
+  background-color: rgba(51, 65, 85, 0.5) !important;
+}
+
+.hover\:bg-gray-100:hover {
+  background-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* Table styling */
+thead {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+}
+
+tbody tr:hover {
+  background-color: rgba(51, 65, 85, 0.4) !important;
+}
+
+/* Scrollbar for night mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* Scrollbar hide for horizontal scroll */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Links */
+a {
+  color: #34d399;
+}
+
+a:hover {
+  color: #6ee7b7;
+}
+
+/* Modal overlay */
+.bg-black.bg-opacity-50 {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Card backgrounds in modals */
+.rounded-2xl.shadow-2xl {
+  background-color: rgba(30, 41, 59, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Alert backgrounds */
+.bg-green-50, .bg-green-100 {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+.bg-red-50, .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+.bg-yellow-50, .bg-yellow-100 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+.bg-blue-50, .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Badge backgrounds */
+.bg-purple-100 {
+  background-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Gradient text glow effect */
+.text-emerald-600, .text-emerald-700 {
+  color: #34d399 !important;
+  text-shadow: 0 0 20px rgba(52, 211, 153, 0.3);
+}
+
+.text-blue-600, .text-blue-700 {
+  color: #60a5fa !important;
+  text-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+}
+
+
+/* Blob animation for night mode background */
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
