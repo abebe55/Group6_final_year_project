@@ -31,9 +31,8 @@ public class HorseServiceServiceImpl implements HorseServiceService {
                         new ResourceNotFoundException(
                                 "RoadInfo not found with id: " + dto.getRoadInfoId()));
 
-        if (horseServiceRepository.existsByRoadInfoId(road.getId())) {
-            throw new IllegalStateException("Horse service already exists for this road");
-        }
+
+        // Allow multiple horse services per road (one road can have many horse owners)
 
         HorseService horse = new HorseService();
         horse.setRoadInfo(road);
@@ -58,12 +57,8 @@ public class HorseServiceServiceImpl implements HorseServiceService {
                         new ResourceNotFoundException(
                                 "RoadInfo not found with id: " + dto.getRoadInfoId()));
 
-        // If road is changed, ensure uniqueness
-        if (!horse.getRoadInfo().getId().equals(road.getId())
-                && horseServiceRepository.existsByRoadInfoId(road.getId())) {
-            throw new IllegalStateException(
-                    "Horse service already exists for this road");
-        }
+
+        // Allow updating to any road (multiple horse services per road is allowed)
 
         horse.setOwnerName(dto.getOwnerName());
         horse.setContactInfo(dto.getContactInfo());

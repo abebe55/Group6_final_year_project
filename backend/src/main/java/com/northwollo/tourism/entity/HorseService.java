@@ -12,8 +12,8 @@ import lombok.Data;  // ✅ Import added
 public class HorseService extends BaseEntity {
 
     @NotNull
-    @OneToOne
-    @JoinColumn(name = "road_info_id", nullable = false, unique = true)
+    @ManyToOne
+    @JoinColumn(name = "road_info_id", nullable = false)
     private RoadInfo roadInfo;
 
     @NotBlank

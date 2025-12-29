@@ -195,6 +195,7 @@ public class AuthServiceImpl implements AuthService {
             log.info("Checking if email exists...");
             if (userRepository.existsByEmail(dto.getEmail())) {
                 throw new BadRequestException("Email already exists");
+
             }
             log.info("Email is available");
 
@@ -216,6 +217,16 @@ public class AuthServiceImpl implements AuthService {
 
             User savedUser = userRepository.save(user);
             log.info("User saved successfully with ID: {}", savedUser.getId());
+            
+            // Send email verification OTP after successful registration
+            try {
+                com.northwollo.tourism.dto.request.EmailVerificationRequestDto verificationRequest = 
+                    new com.northwollo.tourism.dto.request.EmailVerificationRequestDto(savedUser.getEmail());
+                emailVerificationService.sendVerificationEmail(verificationRequest, ipAddress, userAgent);
+                log.info("Email verification OTP sent to: {}", savedUser.getEmail());
+            } catch (Exception e) {
+                log.warn("Failed to send email verification OTP: {}. User can request it manually.", e.getMessage());
+            }
             
             log.info("=== REGISTRATION COMPLETE ===");
         } catch (BadRequestException | ResourceNotFoundException e) {
