@@ -15,9 +15,15 @@ import java.util.Optional;
 public interface EmailVerificationTokenRepository extends JpaRepository<EmailVerificationToken, Long> {
 
     /**
-     * Find an email verification token by token string
+     * Find an email verification token by token string (OTP)
      */
     Optional<EmailVerificationToken> findByToken(String token);
+
+    /**
+     * Find an email verification token by token and email
+     */
+    @Query("SELECT evt FROM EmailVerificationToken evt WHERE evt.token = :token AND evt.email = :email")
+    Optional<EmailVerificationToken> findByTokenAndEmail(@Param("token") String token, @Param("email") String email);
 
     /**
      * Find all tokens for a specific user
@@ -28,6 +34,12 @@ public interface EmailVerificationTokenRepository extends JpaRepository<EmailVer
      * Find all tokens for a specific email
      */
     List<EmailVerificationToken> findByEmail(String email);
+
+    /**
+     * Find the latest token for an email (for cooldown check)
+     */
+    @Query("SELECT evt FROM EmailVerificationToken evt WHERE evt.email = :email ORDER BY evt.createdAt DESC LIMIT 1")
+    Optional<EmailVerificationToken> findLatestByEmail(@Param("email") String email);
 
     /**
      * Find all valid (unverified and not expired) tokens for a user
@@ -52,6 +64,12 @@ public interface EmailVerificationTokenRepository extends JpaRepository<EmailVer
      */
     @Query("SELECT COUNT(evt) FROM EmailVerificationToken evt WHERE evt.email = :email AND evt.verified = false AND evt.expiresAt > :now")
     long countValidTokensByEmail(@Param("email") String email, @Param("now") LocalDateTime now);
+
+    /**
+     * Count tokens created by email since a time (for rate limiting)
+     */
+    @Query("SELECT COUNT(evt) FROM EmailVerificationToken evt WHERE evt.email = :email AND evt.createdAt > :since")
+    long countTokensByEmailSince(@Param("email") String email, @Param("since") LocalDateTime since);
 
     /**
      * Delete all expired tokens (cleanup job)

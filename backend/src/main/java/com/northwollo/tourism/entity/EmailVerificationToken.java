@@ -20,8 +20,8 @@ import java.time.LocalDateTime;
 public class EmailVerificationToken extends BaseEntity {
 
     @NotBlank
-    @Column(nullable = false, unique = true, length = 255)
-    private String token;
+    @Column(nullable = false, length = 6)
+    private String token; // 6-digit OTP
 
     @NotNull
     @Column(nullable = false)
@@ -39,6 +39,9 @@ public class EmailVerificationToken extends BaseEntity {
     @Column(nullable = false)
     private boolean verified = false;
 
+    @Column(nullable = false)
+    private int attemptCount = 0; // Track failed verification attempts
+
     @Column(length = 45)
     private String ipAddress;
 
@@ -52,6 +55,7 @@ public class EmailVerificationToken extends BaseEntity {
         this.email = email;
         this.expiresAt = expiresAt;
         this.verified = false;
+        this.attemptCount = 0;
     }
 
     // Helper methods
@@ -65,5 +69,9 @@ public class EmailVerificationToken extends BaseEntity {
 
     public void markAsVerified() {
         this.verified = true;
+    }
+
+    public void incrementAttemptCount() {
+        this.attemptCount++;
     }
 }

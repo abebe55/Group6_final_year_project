@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Base64;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 @Service
@@ -28,17 +28,20 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final UserRepository userRepository;
     private final EmailService emailService;
 
-    @Value("${app.email-verification.token-expiry-hours:24}")
-    private int tokenExpiryHours;
+    @Value("${app.email-verification.otp-expiry-minutes:15}")
+    private int otpExpiryMinutes;
 
-    @Value("${app.email-verification.max-tokens-per-email:3}")
-    private int maxTokensPerEmail;
+    @Value("${app.email-verification.max-attempts-per-otp:3}")
+    private int maxAttemptsPerOtp;
 
-    @Value("${app.email-verification.max-tokens-per-ip-per-hour:5}")
-    private int maxTokensPerIpPerHour;
+    @Value("${app.email-verification.max-otps-per-email-per-hour:3}")
+    private int maxOtpsPerEmailPerHour;
 
-    @Value("${app.frontend.base-url:http://localhost:3000}")
-    private String frontendBaseUrl;
+    @Value("${app.email-verification.max-otps-per-ip-per-hour:5}")
+    private int maxOtpsPerIpPerHour;
+
+    @Value("${app.email-verification.cooldown-seconds:60}")
+    private int cooldownSeconds;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -68,58 +71,93 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             return EmailVerificationResponseDto.success("Email is already verified.");
         }
 
+        // Check cooldown - prevent spam
+        Optional<EmailVerificationToken> lastToken = emailVerificationTokenRepository.findLatestByEmail(email);
+        if (lastToken.isPresent()) {
+            long secondsSinceLastRequest = ChronoUnit.SECONDS.between(lastToken.get().getCreatedAt(), LocalDateTime.now());
+            if (secondsSinceLastRequest < cooldownSeconds) {
+                long waitTime = cooldownSeconds - secondsSinceLastRequest;
+                log.warn("Cooldown active for email: {}. Wait {} seconds", email, waitTime);
+                return EmailVerificationResponseDto.error("Please wait " + waitTime + " seconds before requesting another OTP.");
+            }
+        }
+
         // Rate limiting checks
         if (!checkRateLimits(email, ipAddress)) {
             log.warn("Rate limit exceeded for email verification. Email: {}, IP: {}", email, ipAddress);
-            return EmailVerificationResponseDto.error("Too many verification requests. Please try again later.");
+            return EmailVerificationResponseDto.error("Too many verification requests. Please try again in 1 hour.");
         }
 
-        // Generate secure token
-        String token = generateSecureToken();
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(tokenExpiryHours);
+        // Invalidate any existing unused OTPs for this email
+        emailVerificationTokenRepository.markAllTokensAsVerifiedByEmail(email);
 
-        // Create and save verification token
-        EmailVerificationToken verificationToken = new EmailVerificationToken(token, user.getId(), email, expiresAt);
+        // Generate 6-digit OTP
+        String otp = generateOtp();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(otpExpiryMinutes);
+
+        // Create and save verification OTP
+        EmailVerificationToken verificationToken = new EmailVerificationToken(otp, user.getId(), email, expiresAt);
         verificationToken.setIpAddress(ipAddress);
         verificationToken.setUserAgent(userAgent);
         emailVerificationTokenRepository.save(verificationToken);
 
-        // Send verification email
-        String verificationLink = frontendBaseUrl + "/auth/verify-email?token=" + token;
-        boolean emailSent = emailService.sendEmailVerificationEmail(email, verificationLink);
+        // Send verification OTP email
+        boolean emailSent = emailService.sendEmailVerificationOtpEmail(email, otp, otpExpiryMinutes);
 
         if (!emailSent) {
-            log.error("Failed to send email verification email to: {}", email);
-            return EmailVerificationResponseDto.error("Failed to send verification email. Please try again.");
+            log.error("Failed to send email verification OTP to: {}", email);
+            return EmailVerificationResponseDto.error("Failed to send verification OTP. Please try again.");
         }
 
-        log.info("Email verification token generated for user: {} from IP: {}", user.getId(), ipAddress);
-        return EmailVerificationResponseDto.success("Verification email has been sent. Please check your inbox.");
+        log.info("Email verification OTP generated for user: {} from IP: {}", user.getId(), ipAddress);
+        return EmailVerificationResponseDto.builder()
+                .success(true)
+                .message("A 6-digit OTP has been sent to your email. It expires in " + otpExpiryMinutes + " minutes.")
+                .expiresInMinutes(otpExpiryMinutes)
+                .build();
     }
 
     @Override
     @Transactional
-    public EmailVerificationResponseDto verifyEmail(String token, String ipAddress, String userAgent) {
-        // Find and validate token
-        Optional<EmailVerificationToken> tokenOpt = emailVerificationTokenRepository.findByToken(token);
+    public EmailVerificationResponseDto verifyEmail(String otp, String ipAddress, String userAgent) {
+        // Validate OTP format
+        if (!isValidOtpFormat(otp)) {
+            log.warn("Invalid OTP format attempted from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("Invalid OTP format. Please enter a 6-digit code.");
+        }
+
+        // Find and validate OTP
+        Optional<EmailVerificationToken> tokenOpt = emailVerificationTokenRepository.findByToken(otp.trim());
         if (tokenOpt.isEmpty()) {
-            log.warn("Invalid email verification token used from IP: {}", ipAddress);
-            return EmailVerificationResponseDto.error("Invalid or expired verification token.");
+            log.warn("Invalid email verification OTP used from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("Invalid or expired OTP.");
         }
 
         EmailVerificationToken verificationToken = tokenOpt.get();
         
-        // Check if token is valid (not verified and not expired)
+        // Check if OTP is valid (not verified and not expired)
         if (!verificationToken.isValid()) {
-            log.warn("Expired or used email verification token: {} from IP: {}", token, ipAddress);
-            return EmailVerificationResponseDto.error("Invalid or expired verification token.");
+            log.warn("Expired or used email verification OTP from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("OTP has expired. Please request a new one.");
         }
+
+        // Check attempt count
+        if (verificationToken.getAttemptCount() >= maxAttemptsPerOtp) {
+            verificationToken.markAsVerified();
+            emailVerificationTokenRepository.save(verificationToken);
+            log.warn("Max OTP attempts exceeded for token from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("Too many failed attempts. Please request a new OTP.");
+        }
+
+        // Increment attempt count
+        verificationToken.incrementAttemptCount();
+        emailVerificationTokenRepository.save(verificationToken);
 
         // Find user
         Optional<User> userOpt = userRepository.findById(verificationToken.getUserId());
         if (userOpt.isEmpty()) {
-            log.error("User not found for email verification token: {}", verificationToken.getUserId());
-            return EmailVerificationResponseDto.error("Invalid verification token.");
+            log.error("User not found for email verification OTP: {}", verificationToken.getUserId());
+            return EmailVerificationResponseDto.error("Invalid OTP.");
         }
 
         User user = userOpt.get();
@@ -129,15 +167,75 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         user.setEmailVerifiedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        // Mark token as verified
+        // Mark OTP as verified
         verificationToken.markAsVerified();
         emailVerificationTokenRepository.save(verificationToken);
 
-        // Mark all other tokens for this email as verified
+        // Mark all other OTPs for this email as verified
         emailVerificationTokenRepository.markAllTokensAsVerifiedByEmail(user.getEmail());
 
         log.info("Email successfully verified for user: {} from IP: {}", user.getId(), ipAddress);
-        return EmailVerificationResponseDto.success("Email has been verified successfully.");
+        return EmailVerificationResponseDto.success("Email has been verified successfully!");
+    }
+
+    @Override
+    @Transactional
+    public EmailVerificationResponseDto verifyEmailWithEmail(String email, String otp, String ipAddress, String userAgent) {
+        // Validate OTP format
+        if (!isValidOtpFormat(otp)) {
+            log.warn("Invalid OTP format attempted from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("Invalid OTP format. Please enter a 6-digit code.");
+        }
+
+        String normalizedEmail = email.toLowerCase().trim();
+
+        // Find and validate OTP for this specific email
+        Optional<EmailVerificationToken> tokenOpt = emailVerificationTokenRepository.findByTokenAndEmail(otp.trim(), normalizedEmail);
+        if (tokenOpt.isEmpty()) {
+            log.warn("Invalid email verification OTP for email {} from IP: {}", normalizedEmail, ipAddress);
+            return EmailVerificationResponseDto.error("Invalid or expired OTP.");
+        }
+
+        EmailVerificationToken verificationToken = tokenOpt.get();
+        
+        // Check if OTP is valid (not verified and not expired)
+        if (!verificationToken.isValid()) {
+            log.warn("Expired or used email verification OTP from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("OTP has expired. Please request a new one.");
+        }
+
+        // Check attempt count
+        if (verificationToken.getAttemptCount() >= maxAttemptsPerOtp) {
+            verificationToken.markAsVerified();
+            emailVerificationTokenRepository.save(verificationToken);
+            log.warn("Max OTP attempts exceeded for token from IP: {}", ipAddress);
+            return EmailVerificationResponseDto.error("Too many failed attempts. Please request a new OTP.");
+        }
+
+        // Increment attempt count
+        verificationToken.incrementAttemptCount();
+        emailVerificationTokenRepository.save(verificationToken);
+
+        // Find user
+        Optional<User> userOpt = userRepository.findById(verificationToken.getUserId());
+        if (userOpt.isEmpty()) {
+            log.error("User not found for email verification OTP: {}", verificationToken.getUserId());
+            return EmailVerificationResponseDto.error("Invalid OTP.");
+        }
+
+        User user = userOpt.get();
+
+        // Update user email verification status
+        user.setEmailVerified(true);
+        user.setEmailVerifiedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        // Mark OTP as verified
+        verificationToken.markAsVerified();
+        emailVerificationTokenRepository.save(verificationToken);
+
+        log.info("Email successfully verified for user: {} from IP: {}", user.getId(), ipAddress);
+        return EmailVerificationResponseDto.success("Email has been verified successfully!");
     }
 
     @Override
@@ -182,6 +280,9 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     @Override
     public boolean isValidVerificationToken(String token) {
+        if (!isValidOtpFormat(token)) {
+            return false;
+        }
         return emailVerificationTokenRepository.existsValidToken(token, LocalDateTime.now());
     }
 
@@ -189,32 +290,42 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     @Transactional
     public int cleanupExpiredTokens() {
         int deletedCount = emailVerificationTokenRepository.deleteExpiredTokens(LocalDateTime.now());
-        log.info("Cleaned up {} expired email verification tokens", deletedCount);
+        log.info("Cleaned up {} expired email verification OTPs", deletedCount);
         return deletedCount;
     }
 
     private boolean checkRateLimits(String email, String ipAddress) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
         
         // Check email-based rate limit
-        long emailTokenCount = emailVerificationTokenRepository.countValidTokensByEmail(email, now);
-        if (emailTokenCount >= maxTokensPerEmail) {
+        long emailOtpCount = emailVerificationTokenRepository.countTokensByEmailSince(email, oneHourAgo);
+        if (emailOtpCount >= maxOtpsPerEmailPerHour) {
+            log.warn("Email rate limit exceeded: {} OTPs in last hour for email {}", emailOtpCount, email);
             return false;
         }
 
         // Check IP-based rate limit
-        LocalDateTime oneHourAgo = now.minusHours(1);
-        long ipTokenCount = emailVerificationTokenRepository.countTokensByIpAddressSince(ipAddress, oneHourAgo);
-        if (ipTokenCount >= maxTokensPerIpPerHour) {
+        long ipOtpCount = emailVerificationTokenRepository.countTokensByIpAddressSince(ipAddress, oneHourAgo);
+        if (ipOtpCount >= maxOtpsPerIpPerHour) {
+            log.warn("IP rate limit exceeded: {} OTPs in last hour from IP {}", ipOtpCount, ipAddress);
             return false;
         }
 
         return true;
     }
 
-    private String generateSecureToken() {
-        byte[] tokenBytes = new byte[32]; // 256 bits
-        secureRandom.nextBytes(tokenBytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+    /**
+     * Generate a cryptographically secure 6-digit OTP
+     */
+    private String generateOtp() {
+        int otp = 100000 + secureRandom.nextInt(900000); // Generates 100000-999999
+        return String.valueOf(otp);
+    }
+
+    /**
+     * Validate OTP format (6 digits)
+     */
+    private boolean isValidOtpFormat(String otp) {
+        return otp != null && otp.trim().matches("^\\d{6}$");
     }
 }

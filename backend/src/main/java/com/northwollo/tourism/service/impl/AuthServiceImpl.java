@@ -138,10 +138,12 @@ public class AuthServiceImpl implements AuthService {
         if (ipAddress != null) {
             String deviceInfo = extractDeviceInfo(userAgent);
             String refreshToken = tokenRefreshService.generateRefreshToken(user.getId(), ipAddress, userAgent, deviceInfo);
-            return new AuthResponseDto(accessToken, refreshToken, accessTokenExpiration / 1000);
+            return new AuthResponseDto(accessToken, refreshToken, accessTokenExpiration / 1000, user.getId());
         } else {
             // Backward compatibility - return only access token
-            return new AuthResponseDto(accessToken);
+            AuthResponseDto response = new AuthResponseDto(accessToken);
+            response.setUserId(user.getId());
+            return response;
         }
     }
 
@@ -180,38 +182,51 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void register(UserRegisterDto dto, String ipAddress, String userAgent) {
-        if (userRepository.existsByUsername(dto.getUsername())) {
-            throw new BadRequestException("Username already exists");
-        }
-
-        if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new BadRequestException("Email already exists");
-        }
-
-        Role role = roleRepository.findByName("CLIENT")
-                .orElseThrow(() -> new ResourceNotFoundException("Role CLIENT not found"));
-
-        User user = new User();
-        user.setUsername(dto.getUsername());
-        user.setEmail(dto.getEmail().toLowerCase().trim());
-        user.setFullName(dto.getFullName());
-        user.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
-        user.setRoles(Set.of(role));
-        user.setActive(true);
-        user.setEmailVerified(false); // New users need to verify email
-
-        User savedUser = userRepository.save(user);
-
-        // Send email verification if IP address is provided
-        if (ipAddress != null) {
-            try {
-                com.northwollo.tourism.dto.request.EmailVerificationRequestDto verificationRequest = 
-                    new com.northwollo.tourism.dto.request.EmailVerificationRequestDto(user.getEmail());
-                emailVerificationService.sendVerificationEmail(verificationRequest, ipAddress, userAgent);
-            } catch (Exception e) {
-                // Log error but don't fail registration
-                log.error("Failed to send verification email for user: {}", savedUser.getId(), e);
+        log.info("=== REGISTRATION START ===");
+        log.info("Username: {}, Email: {}, FullName: {}", dto.getUsername(), dto.getEmail(), dto.getFullName());
+        
+        try {
+            log.info("Checking if username exists...");
+            if (userRepository.existsByUsername(dto.getUsername())) {
+                throw new BadRequestException("Username already exists");
             }
+            log.info("Username is available");
+
+            log.info("Checking if email exists...");
+            if (userRepository.existsByEmail(dto.getEmail())) {
+                throw new BadRequestException("Email already exists");
+            }
+            log.info("Email is available");
+
+            log.info("Looking for CLIENT role...");
+            Role role = roleRepository.findByName("CLIENT")
+                    .orElseThrow(() -> new ResourceNotFoundException("Role CLIENT not found"));
+            log.info("Found CLIENT role with ID: {}", role.getId());
+
+            log.info("Creating user entity...");
+            User user = new User();
+            user.setUsername(dto.getUsername());
+            user.setEmail(dto.getEmail().toLowerCase().trim());
+            user.setFullName(dto.getFullName());
+            user.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
+            user.setRoles(Set.of(role));
+            user.setActive(true);
+            user.setEmailVerified(false);
+            log.info("User entity created, saving to database...");
+
+            User savedUser = userRepository.save(user);
+            log.info("User saved successfully with ID: {}", savedUser.getId());
+            
+            log.info("=== REGISTRATION COMPLETE ===");
+        } catch (BadRequestException | ResourceNotFoundException e) {
+            log.error("Registration validation error: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("=== REGISTRATION ERROR ===");
+            log.error("Exception type: {}", e.getClass().getName());
+            log.error("Message: {}", e.getMessage());
+            log.error("Stack trace:", e);
+            throw e;
         }
     }
 

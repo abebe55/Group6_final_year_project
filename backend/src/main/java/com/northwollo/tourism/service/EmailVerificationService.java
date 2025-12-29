@@ -6,7 +6,7 @@ import com.northwollo.tourism.dto.response.EmailVerificationResponseDto;
 public interface EmailVerificationService {
 
     /**
-     * Send email verification token to user's email
+     * Send email verification OTP to user's email
      * @param request Contains the email address
      * @param ipAddress Client IP address for security tracking
      * @param userAgent Client user agent for security tracking
@@ -15,16 +15,26 @@ public interface EmailVerificationService {
     EmailVerificationResponseDto sendVerificationEmail(EmailVerificationRequestDto request, String ipAddress, String userAgent);
 
     /**
-     * Verify email with token
-     * @param token The verification token
+     * Verify email with OTP
+     * @param otp The 6-digit OTP
      * @param ipAddress Client IP address for security tracking
      * @param userAgent Client user agent for security tracking
      * @return Response indicating success or failure
      */
-    EmailVerificationResponseDto verifyEmail(String token, String ipAddress, String userAgent);
+    EmailVerificationResponseDto verifyEmail(String otp, String ipAddress, String userAgent);
 
     /**
-     * Resend verification email for a user
+     * Verify email with OTP and email address
+     * @param email The email address
+     * @param otp The 6-digit OTP
+     * @param ipAddress Client IP address for security tracking
+     * @param userAgent Client user agent for security tracking
+     * @return Response indicating success or failure
+     */
+    EmailVerificationResponseDto verifyEmailWithEmail(String email, String otp, String ipAddress, String userAgent);
+
+    /**
+     * Resend verification OTP for a user
      * @param userId The user ID
      * @param ipAddress Client IP address for security tracking
      * @param userAgent Client user agent for security tracking
@@ -47,15 +57,15 @@ public interface EmailVerificationService {
     boolean isUserEmailVerified(Long userId);
 
     /**
-     * Validate if a verification token is valid
-     * @param token The verification token to validate
-     * @return true if token is valid and not expired
+     * Validate if a verification OTP is valid
+     * @param otp The OTP to validate
+     * @return true if OTP is valid and not expired
      */
-    boolean isValidVerificationToken(String token);
+    boolean isValidVerificationToken(String otp);
 
     /**
-     * Clean up expired tokens (scheduled job)
-     * @return Number of tokens cleaned up
+     * Clean up expired OTPs (scheduled job)
+     * @return Number of OTPs cleaned up
      */
     int cleanupExpiredTokens();
 }

@@ -42,6 +42,11 @@ public abstract class BaseEntity {
 
     // ================= SETTERS =================
 
+    // For testing purposes - allows setting ID in unit tests
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     protected void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }

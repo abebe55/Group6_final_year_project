@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Base64;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 @Service
@@ -32,17 +32,20 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.password-reset.token-expiry-hours:1}")
-    private int tokenExpiryHours;
+    @Value("${app.password-reset.otp-expiry-minutes:10}")
+    private int otpExpiryMinutes;
 
-    @Value("${app.password-reset.max-tokens-per-user:3}")
-    private int maxTokensPerUser;
+    @Value("${app.password-reset.max-attempts-per-otp:3}")
+    private int maxAttemptsPerOtp;
 
-    @Value("${app.password-reset.max-tokens-per-ip-per-hour:5}")
-    private int maxTokensPerIpPerHour;
+    @Value("${app.password-reset.max-otps-per-user-per-hour:3}")
+    private int maxOtpsPerUserPerHour;
 
-    @Value("${app.frontend.base-url:http://localhost:3000}")
-    private String frontendBaseUrl;
+    @Value("${app.password-reset.max-otps-per-ip-per-hour:5}")
+    private int maxOtpsPerIpPerHour;
+
+    @Value("${app.password-reset.cooldown-seconds:60}")
+    private int cooldownSeconds;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -54,9 +57,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         // Find user by email
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) {
-            // Don't reveal if email exists or not for security
+            // Don't reveal if email exists - but add delay to prevent timing attacks
             log.warn("Password reset requested for non-existent email: {}", email);
-            return PasswordResetResponseDto.success("If the email exists, a reset link has been sent.");
+            return PasswordResetResponseDto.success("If the email exists, a 6-digit OTP has been sent.");
         }
 
         User user = userOpt.get();
@@ -67,82 +70,135 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             return PasswordResetResponseDto.error("Account is inactive. Please contact support.");
         }
 
+        // Check cooldown - prevent spam
+        Optional<PasswordResetToken> lastToken = passwordResetTokenRepository.findLatestByUserId(user.getId());
+        if (lastToken.isPresent()) {
+            long secondsSinceLastRequest = ChronoUnit.SECONDS.between(lastToken.get().getCreatedAt(), LocalDateTime.now());
+            if (secondsSinceLastRequest < cooldownSeconds) {
+                long waitTime = cooldownSeconds - secondsSinceLastRequest;
+                log.warn("Cooldown active for user: {}. Wait {} seconds", user.getId(), waitTime);
+                return PasswordResetResponseDto.error("Please wait " + waitTime + " seconds before requesting another OTP.");
+            }
+        }
+
         // Rate limiting checks
         if (!checkRateLimits(user.getId(), ipAddress)) {
             log.warn("Rate limit exceeded for password reset. User: {}, IP: {}", user.getId(), ipAddress);
-            return PasswordResetResponseDto.error("Too many reset requests. Please try again later.");
+            return PasswordResetResponseDto.error("Too many reset requests. Please try again in 1 hour.");
         }
 
-        // Generate secure token
-        String token = generateSecureToken();
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(tokenExpiryHours);
+        // Invalidate any existing unused OTPs for this user
+        passwordResetTokenRepository.markAllTokensAsUsedByUserId(user.getId());
 
-        // Create and save reset token
-        PasswordResetToken resetToken = new PasswordResetToken(token, user.getId(), expiresAt);
+        // Generate 6-digit OTP
+        String otp = generateOtp();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(otpExpiryMinutes);
+
+        // Create and save OTP token
+        PasswordResetToken resetToken = new PasswordResetToken(otp, user.getId(), expiresAt);
         resetToken.setIpAddress(ipAddress);
         resetToken.setUserAgent(userAgent);
         passwordResetTokenRepository.save(resetToken);
 
-        // Send reset email
-        String resetLink = frontendBaseUrl + "/auth/reset-password?token=" + token;
-        boolean emailSent = emailService.sendPasswordResetEmail(email, resetLink);
+        // Send OTP email
+        boolean emailSent = emailService.sendPasswordResetOtpEmail(email, otp, otpExpiryMinutes);
 
         if (!emailSent) {
-            log.error("Failed to send password reset email to: {}", email);
-            return PasswordResetResponseDto.error("Failed to send reset email. Please try again.");
+            log.error("Failed to send password reset OTP to: {}", email);
+            return PasswordResetResponseDto.error("Failed to send OTP. Please try again.");
         }
 
-        log.info("Password reset token generated for user: {} from IP: {}", user.getId(), ipAddress);
-        return PasswordResetResponseDto.success("If the email exists, a reset link has been sent.");
+        log.info("Password reset OTP generated for user: {} from IP: {}", user.getId(), ipAddress);
+        return PasswordResetResponseDto.builder()
+                .success(true)
+                .message("A 6-digit OTP has been sent to your email. It expires in " + otpExpiryMinutes + " minutes.")
+                .expiresInMinutes(otpExpiryMinutes)
+                .build();
     }
 
     @Override
     @Transactional
     public PasswordResetResponseDto confirmPasswordReset(PasswordResetConfirmDto request, String ipAddress, String userAgent) {
-        String token = request.getToken();
+        String otp = request.getToken().trim();
         String newPassword = request.getNewPassword();
+        String email = request.getEmail() != null ? request.getEmail().toLowerCase().trim() : null;
 
-        // Find and validate token
-        Optional<PasswordResetToken> tokenOpt = passwordResetTokenRepository.findByToken(token);
+        // Validate OTP format
+        if (!isValidOtpFormat(otp)) {
+            log.warn("Invalid OTP format attempted from IP: {}", ipAddress);
+            return PasswordResetResponseDto.error("Invalid OTP format. Please enter a 6-digit code.");
+        }
+
+        // Find user by email if provided
+        User user = null;
+        if (email != null) {
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return PasswordResetResponseDto.error("Invalid email or OTP.");
+            }
+            user = userOpt.get();
+        }
+
+        // Find and validate OTP
+        Optional<PasswordResetToken> tokenOpt;
+        if (user != null) {
+            tokenOpt = passwordResetTokenRepository.findByTokenAndUserId(otp, user.getId());
+        } else {
+            tokenOpt = passwordResetTokenRepository.findByToken(otp);
+        }
+
         if (tokenOpt.isEmpty()) {
-            log.warn("Invalid password reset token used from IP: {}", ipAddress);
-            return PasswordResetResponseDto.error("Invalid or expired reset token.");
+            log.warn("Invalid password reset OTP used from IP: {}", ipAddress);
+            return PasswordResetResponseDto.error("Invalid or expired OTP.");
         }
 
         PasswordResetToken resetToken = tokenOpt.get();
         
-        // Check if token is valid (not used and not expired)
+        // Check if OTP is valid (not used and not expired)
         if (!resetToken.isValid()) {
-            log.warn("Expired or used password reset token: {} from IP: {}", token, ipAddress);
-            return PasswordResetResponseDto.error("Invalid or expired reset token.");
+            log.warn("Expired or used password reset OTP from IP: {}", ipAddress);
+            return PasswordResetResponseDto.error("OTP has expired. Please request a new one.");
         }
 
-        // Find user
-        Optional<User> userOpt = userRepository.findById(resetToken.getUserId());
-        if (userOpt.isEmpty()) {
-            log.error("User not found for password reset token: {}", resetToken.getUserId());
-            return PasswordResetResponseDto.error("Invalid reset token.");
+        // Check attempt count
+        if (resetToken.getAttemptCount() >= maxAttemptsPerOtp) {
+            resetToken.markAsUsed();
+            passwordResetTokenRepository.save(resetToken);
+            log.warn("Max OTP attempts exceeded for token from IP: {}", ipAddress);
+            return PasswordResetResponseDto.error("Too many failed attempts. Please request a new OTP.");
         }
 
-        User user = userOpt.get();
+        // Increment attempt count
+        resetToken.incrementAttemptCount();
+        passwordResetTokenRepository.save(resetToken);
+
+        // Find user if not already found
+        if (user == null) {
+            Optional<User> userOpt = userRepository.findById(resetToken.getUserId());
+            if (userOpt.isEmpty()) {
+                log.error("User not found for password reset OTP: {}", resetToken.getUserId());
+                return PasswordResetResponseDto.error("Invalid OTP.");
+            }
+            user = userOpt.get();
+        }
 
         // Update user password
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        // Mark token as used
+        // Mark OTP as used
         resetToken.markAsUsed();
         passwordResetTokenRepository.save(resetToken);
 
-        // Invalidate all other tokens for this user
-        passwordResetTokenRepository.markAllTokensAsUsedByUserId(user.getId());
-
         log.info("Password successfully reset for user: {} from IP: {}", user.getId(), ipAddress);
-        return PasswordResetResponseDto.success("Password has been reset successfully.");
+        return PasswordResetResponseDto.success("Password has been reset successfully. You can now log in.");
     }
 
     @Override
     public boolean isValidResetToken(String token) {
+        if (!isValidOtpFormat(token)) {
+            return false;
+        }
         return passwordResetTokenRepository.existsValidToken(token, LocalDateTime.now());
     }
 
@@ -150,32 +206,42 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Transactional
     public int cleanupExpiredTokens() {
         int deletedCount = passwordResetTokenRepository.deleteExpiredTokens(LocalDateTime.now());
-        log.info("Cleaned up {} expired password reset tokens", deletedCount);
+        log.info("Cleaned up {} expired password reset OTPs", deletedCount);
         return deletedCount;
     }
 
     private boolean checkRateLimits(Long userId, String ipAddress) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
         
         // Check user-based rate limit
-        long userTokenCount = passwordResetTokenRepository.countValidTokensByUserId(userId, now);
-        if (userTokenCount >= maxTokensPerUser) {
+        long userOtpCount = passwordResetTokenRepository.countTokensByUserIdSince(userId, oneHourAgo);
+        if (userOtpCount >= maxOtpsPerUserPerHour) {
+            log.warn("User rate limit exceeded: {} OTPs in last hour for user {}", userOtpCount, userId);
             return false;
         }
 
         // Check IP-based rate limit
-        LocalDateTime oneHourAgo = now.minusHours(1);
-        long ipTokenCount = passwordResetTokenRepository.countTokensByIpAddressSince(ipAddress, oneHourAgo);
-        if (ipTokenCount >= maxTokensPerIpPerHour) {
+        long ipOtpCount = passwordResetTokenRepository.countTokensByIpAddressSince(ipAddress, oneHourAgo);
+        if (ipOtpCount >= maxOtpsPerIpPerHour) {
+            log.warn("IP rate limit exceeded: {} OTPs in last hour from IP {}", ipOtpCount, ipAddress);
             return false;
         }
 
         return true;
     }
 
-    private String generateSecureToken() {
-        byte[] tokenBytes = new byte[32]; // 256 bits
-        secureRandom.nextBytes(tokenBytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+    /**
+     * Generate a cryptographically secure 6-digit OTP
+     */
+    private String generateOtp() {
+        int otp = 100000 + secureRandom.nextInt(900000); // Generates 100000-999999
+        return String.valueOf(otp);
+    }
+
+    /**
+     * Validate OTP format (6 digits)
+     */
+    private boolean isValidOtpFormat(String otp) {
+        return otp != null && otp.matches("^\\d{6}$");
     }
 }

@@ -1,15 +1,19 @@
 package com.northwollo.tourism.controller;
 
+import com.northwollo.tourism.dto.request.AdminPasswordResetDto;
+import com.northwollo.tourism.dto.request.UserUpdateDto;
 import com.northwollo.tourism.dto.response.UserDto;
 import com.northwollo.tourism.entity.Hotel;
 import com.northwollo.tourism.entity.User;
 import com.northwollo.tourism.repository.HotelRepository;
 import com.northwollo.tourism.repository.UserRepository;
 import com.northwollo.tourism.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -27,13 +31,19 @@ public class AdminController {
     private final HotelRepository hotelRepository;
     private final UserRepository userRepository;
 
-    // Get all users with pagination
+    // Get all users with pagination, sorting, and search
     @GetMapping("/users")
     public ResponseEntity<Page<UserDto>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<UserDto> users = userService.getAllUsers(pageable);
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir,
+            @RequestParam(required = false) String search) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") 
+                ? Sort.by(sortBy).descending() 
+                : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<UserDto> users = userService.searchUsers(search, pageable);
         return ResponseEntity.ok(users);
     }
 
@@ -49,6 +59,24 @@ public class AdminController {
     public ResponseEntity<List<UserDto>> getUsersByRole(@PathVariable String role) {
         List<UserDto> users = userService.getUsersByRole(role.toUpperCase());
         return ResponseEntity.ok(users);
+    }
+
+    // Update user
+    @PutMapping("/users/{id}")
+    public ResponseEntity<UserDto> updateUser(
+            @PathVariable Long id,
+            @Valid @RequestBody UserUpdateDto dto) {
+        UserDto updated = userService.updateUser(id, dto);
+        return ResponseEntity.ok(updated);
+    }
+
+    // Reset user password (Admin only)
+    @PostMapping("/users/{id}/reset-password")
+    public ResponseEntity<Void> resetUserPassword(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminPasswordResetDto dto) {
+        userService.resetUserPassword(id, dto.getNewPassword());
+        return ResponseEntity.ok().build();
     }
 
     // Activate user

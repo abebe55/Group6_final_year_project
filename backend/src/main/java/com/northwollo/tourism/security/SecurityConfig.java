@@ -45,12 +45,23 @@ public class SecurityConfig {
                            ======================= */
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/search/**").permitAll()
+                        
+                        // Swagger UI
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-resources/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
 
                         // Public GET endpoints for tourism (homepage & search)
                         .requestMatchers(HttpMethod.GET, "/api/tourisms/public/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tourisms/*/roads").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tourisms/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/roads/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/map-points/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/guiders/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/ratings/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/hotels/**").permitAll()
 
                         /* =======================
                            👤 AUTHENTICATED USERS

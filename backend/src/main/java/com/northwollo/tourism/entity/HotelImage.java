@@ -1,18 +1,30 @@
 package com.northwollo.tourism.entity;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "hotel_images")
-public class HotelImage extends BaseEntity {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class HotelImage {
 
-    @NotNull
-    @ManyToOne
-    @JoinColumn(name = "hotel_id")
-    private Hotel hotel;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @NotBlank
+    @Column(nullable = false)
     private String imageUrl;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean isMain = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "hotel_id", nullable = false)
+    private Hotel hotel;
 }

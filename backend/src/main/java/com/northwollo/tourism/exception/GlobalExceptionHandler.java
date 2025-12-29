@@ -66,9 +66,28 @@ public class GlobalExceptionHandler {
     // =========================
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
-        ex.printStackTrace(); // Optional: log stack trace for debugging
+        // Log the full stack trace for debugging
+        System.err.println("=== INTERNAL SERVER ERROR ===");
+        System.err.println("Exception type: " + ex.getClass().getName());
+        System.err.println("Message: " + ex.getMessage());
+        
+        // Get root cause for better debugging
+        Throwable rootCause = ex;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+        System.err.println("Root cause: " + rootCause.getClass().getName() + " - " + rootCause.getMessage());
+        ex.printStackTrace();
+        System.err.println("=============================");
+        
+        // In development, return more details including root cause
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("error", "Internal server error");
+        errorResponse.put("details", ex.getMessage() != null ? ex.getMessage() : "Unknown error");
+        errorResponse.put("type", ex.getClass().getSimpleName());
+        errorResponse.put("rootCause", rootCause.getMessage() != null ? rootCause.getMessage() : rootCause.getClass().getSimpleName());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(error("Internal server error"));
+                .body(errorResponse);
     }
 
     // =========================

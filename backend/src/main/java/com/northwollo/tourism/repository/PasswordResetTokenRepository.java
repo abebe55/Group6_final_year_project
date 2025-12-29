@@ -15,14 +15,26 @@ import java.util.Optional;
 public interface PasswordResetTokenRepository extends JpaRepository<PasswordResetToken, Long> {
 
     /**
-     * Find a password reset token by token string
+     * Find a password reset token by token string (OTP)
      */
     Optional<PasswordResetToken> findByToken(String token);
+
+    /**
+     * Find a password reset token by token and user ID
+     */
+    @Query("SELECT prt FROM PasswordResetToken prt WHERE prt.token = :token AND prt.userId = :userId")
+    Optional<PasswordResetToken> findByTokenAndUserId(@Param("token") String token, @Param("userId") Long userId);
 
     /**
      * Find all tokens for a specific user (for cleanup/security purposes)
      */
     List<PasswordResetToken> findByUserId(Long userId);
+
+    /**
+     * Find the latest token for a user (for cooldown check)
+     */
+    @Query("SELECT prt FROM PasswordResetToken prt WHERE prt.userId = :userId ORDER BY prt.createdAt DESC LIMIT 1")
+    Optional<PasswordResetToken> findLatestByUserId(@Param("userId") Long userId);
 
     /**
      * Find all valid (unused and not expired) tokens for a user
@@ -35,6 +47,12 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
      */
     @Query("SELECT COUNT(prt) FROM PasswordResetToken prt WHERE prt.userId = :userId AND prt.used = false AND prt.expiresAt > :now")
     long countValidTokensByUserId(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    /**
+     * Count tokens created by user since a time (for rate limiting)
+     */
+    @Query("SELECT COUNT(prt) FROM PasswordResetToken prt WHERE prt.userId = :userId AND prt.createdAt > :since")
+    long countTokensByUserIdSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 
     /**
      * Delete all expired tokens (cleanup job)
