@@ -553,44 +553,44 @@ export default function HotelOwnerBookingPage() {
                   </div>
 
                   {/* Messages */}
-                  <div className="p-6">
-                    <h3 className="font-semibold text-gray-700 mb-3">💬 Conversation ({selectedBooking.messages?.length || 0})</h3>
-                    <div className="space-y-3 max-h-64 overflow-y-auto mb-4 bg-gray-50 p-4 rounded-lg">
+                  <div className="p-6 bg-green-900 rounded-b-lg">
+                    <h3 className="font-black text-white mb-3">💬 Conversation ({selectedBooking.messages?.length || 0})</h3>
+                    <div className="space-y-3 max-h-64 overflow-y-auto mb-4 bg-green-300 p-4 rounded-xl shadow-inner [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:bg-gray-300 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-gray-300">
                       {selectedBooking.messages?.length === 0 ? (
-                        <p className="text-gray-500 text-center py-4">No messages yet</p>
+                        <p className="text-green-950 text-center py-4 font-bold">No messages yet</p>
                       ) : (
                         selectedBooking.messages?.map((m) => (
                           <div
                             key={m.id}
-                            className={`p-3 rounded-lg ${
-                              m.senderId === userId ? "bg-emerald-100 ml-8" : "bg-white mr-8 border"
+                            className={`p-4 rounded-xl shadow-md ${
+                              m.senderId === userId ? "bg-green-500 ml-8" : "bg-green-100 mr-8"
                             }`}
                           >
-                            <div className="flex justify-between text-xs text-gray-500 mb-1">
-                              <span className="font-medium">{m.senderName}</span>
-                              <span>{new Date(m.createdAt).toLocaleString()}</span>
+                            <div className="flex justify-between text-xs text-green-950 mb-2">
+                              <span className="font-black">{m.senderName}</span>
+                              <span className="font-bold">{new Date(m.createdAt).toLocaleString()}</span>
                             </div>
-                            <div className="text-gray-800">{m.message}</div>
+                            <div className="text-gray-900 font-bold">{m.message}</div>
                             {m.messageType !== "GENERAL" && (
-                              <span className="text-xs text-gray-400 mt-1 block">[{m.messageType}]</span>
+                              <span className="text-xs text-green-950 mt-2 block font-black bg-green-400 px-2 py-1 rounded inline-block">[{m.messageType}]</span>
                             )}
                           </div>
                         ))
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <input
                         type="text"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Type a message to the client..."
-                        className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        className="flex-1 bg-white rounded-xl px-4 py-3 font-bold focus:ring-2 focus:ring-green-600"
                         onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                       />
                       <button
                         onClick={handleSendMessage}
                         disabled={!newMessage.trim()}
-                        className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
+                        className="bg-green-700 text-white px-6 py-3 rounded-xl font-black hover:bg-green-800 disabled:opacity-50 shadow-md"
                       >
                         Send
                       </button>

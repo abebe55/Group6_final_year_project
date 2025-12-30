@@ -140,6 +140,11 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/roads/page.js"
+    ],
+    "/hotels/[id]/booking/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/hotels/[id]/booking/page.js"
     ]
   }
 }

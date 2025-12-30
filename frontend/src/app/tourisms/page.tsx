@@ -344,13 +344,15 @@ export default function TourismListingPage() {
         {authModalContent === "login" && (
           <LoginForm 
             onSuccess={handleLoginSuccess} 
-            onRegisterClick={() => setAuthModalContent("register")} 
+            onRegisterClick={() => setAuthModalContent("register")}
+            onCancel={() => { setAuthModalOpen(false); setPendingNavId(null); setAuthModalContent(null); }}
           />
         )}
         {authModalContent === "register" && (
           <RegisterForm 
             onSuccess={handleRegisterSuccess} 
-            onLoginClick={() => setAuthModalContent("login")} 
+            onLoginClick={() => setAuthModalContent("login")}
+            onCancel={() => { setAuthModalOpen(false); setPendingNavId(null); setAuthModalContent(null); }}
           />
         )}
       </Modal>

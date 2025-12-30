@@ -11,9 +11,10 @@ import { validateForm, hasErrors, schemas, ValidationErrors } from "@/utils/vali
 interface Props {
   onSuccess?: () => void;
   onRegisterClick?: () => void;
+  onCancel?: () => void;
 }
 
-export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
+export default function LoginForm({ onSuccess, onRegisterClick, onCancel }: Props) {
   const [formData, setFormData] = useState({
     usernameOrEmail: "",
     password: ""
@@ -80,13 +81,18 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
       
       if (res?.token) {
         auth.login(res.token, res.refreshToken, res.userId);
-        onSuccess?.();
         
-        setTimeout(() => {
-          const currentAuth = useAuthStore.getState();
-          const redirectTo = searchParams.get('redirect') || getDefaultRedirect(currentAuth.role);
-          router.push(redirectTo);
-        }, 100);
+        // If onSuccess callback is provided (modal usage), let the parent handle navigation
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          // Standalone login page - redirect based on role or redirect param
+          setTimeout(() => {
+            const currentAuth = useAuthStore.getState();
+            const redirectTo = searchParams.get('redirect') || getDefaultRedirect(currentAuth.role);
+            router.push(redirectTo);
+          }, 100);
+        }
       } else {
         throw new Error("Invalid login response - no token received");
       }
@@ -199,7 +205,7 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
             {/* Cancel Button */}
             <button
               type="button"
-              onClick={() => router.push('/')}
+              onClick={() => onCancel ? onCancel() : router.push('/')}
               className="w-full py-3 px-4 border-2 border-gray-400 text-gray-700 font-bold rounded-lg hover:bg-gray-100 transition-colors"
             >
               Cancel

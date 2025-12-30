@@ -87,8 +87,14 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
     try {
       const { confirmPassword, ...registerData } = formData;
       await register(registerData);
-      if (onSuccess) onSuccess();
-      router.push('/auth/login?registered=true');
+      
+      // If onSuccess callback is provided (modal usage), let the parent handle navigation
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        // Standalone register page - redirect to login
+        router.push('/auth/login?registered=true');
+      }
     } catch (err: any) {
       setServerError(err.message || "Registration failed");
     } finally {

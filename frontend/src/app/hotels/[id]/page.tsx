@@ -859,21 +859,24 @@ export default function HotelDetailPage() {
                           )}
 
                           {/* Messages */}
-                          <div className="border-t-2 border-indigo-200 pt-5">
-                            <h4 className="text-indigo-800 font-black text-lg mb-4 flex items-center gap-2">
-                              <span className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white text-sm">💬</span>
-                              Messages
+                          <div className="bg-green-900 rounded-xl p-5 mt-2">
+                            <h4 className="text-white font-black text-lg mb-4 flex items-center gap-2">
+                              <span className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center text-white text-sm">💬</span>
+                              Messages ({selectedBooking.messages?.length || 0})
                             </h4>
-                            <div className="space-y-3 max-h-48 overflow-y-auto mb-4">
+                            <div className="space-y-3 max-h-48 overflow-y-auto mb-4 bg-green-300 p-4 rounded-xl shadow-inner [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:bg-gray-300 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-gray-300">
                               {selectedBooking.messages?.length > 0 ? (
                                 selectedBooking.messages.map((m) => (
-                                  <div key={m.id} className={`p-4 rounded-xl ${m.senderId === userId ? 'bg-gradient-to-r from-blue-100 to-indigo-100 ml-8 border-2 border-blue-300' : 'bg-gradient-to-r from-gray-100 to-slate-100 mr-8 border-2 border-gray-300'}`}>
-                                    <p className="text-indigo-600 text-xs mb-1 font-black">{m.senderName}</p>
-                                    <p className="text-gray-800 font-semibold">{m.message}</p>
+                                  <div key={m.id} className={`p-4 rounded-xl shadow-md ${m.senderId === userId ? 'bg-green-500 ml-8' : 'bg-green-100 mr-8'}`}>
+                                    <div className="flex justify-between text-xs text-green-950 mb-2">
+                                      <span className="font-black">{m.senderName}</span>
+                                      <span className="font-bold">{new Date(m.createdAt).toLocaleString()}</span>
+                                    </div>
+                                    <p className="text-gray-900 font-bold">{m.message}</p>
                                   </div>
                                 ))
                               ) : (
-                                <p className="text-indigo-400 text-center py-6 font-semibold">No messages yet</p>
+                                <p className="text-green-950 text-center py-6 font-bold">No messages yet</p>
                               )}
                             </div>
                             <div className="flex gap-3">
@@ -882,13 +885,13 @@ export default function HotelDetailPage() {
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 placeholder="Type a message..."
-                                className="flex-1 bg-white border-2 border-indigo-200 rounded-xl px-4 py-3 text-indigo-800 font-semibold placeholder-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-200 hover:border-indigo-400 transition-all"
+                                className="flex-1 bg-white rounded-xl px-4 py-3 text-gray-900 font-bold placeholder-gray-400 focus:ring-2 focus:ring-green-600 transition-all"
                                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                               />
                               <button
                                 onClick={handleSendMessage}
                                 disabled={!newMessage.trim()}
-                                className="bg-gradient-to-r from-indigo-500 to-blue-500 text-white px-6 py-3 rounded-xl font-black hover:from-indigo-600 hover:to-blue-600 disabled:opacity-50 transition-all shadow-lg"
+                                className="bg-green-700 text-white px-6 py-3 rounded-xl font-black hover:bg-green-800 disabled:opacity-50 transition-all shadow-md"
                               >
                                 Send
                               </button>

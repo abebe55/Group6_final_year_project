@@ -31,9 +31,7 @@ public class HorseServiceServiceImpl implements HorseServiceService {
                         new ResourceNotFoundException(
                                 "RoadInfo not found with id: " + dto.getRoadInfoId()));
 
-
         // Allow multiple horse services per road (one road can have many horse owners)
-
         HorseService horse = new HorseService();
         horse.setRoadInfo(road);
         horse.setOwnerName(dto.getOwnerName());
@@ -57,9 +55,7 @@ public class HorseServiceServiceImpl implements HorseServiceService {
                         new ResourceNotFoundException(
                                 "RoadInfo not found with id: " + dto.getRoadInfoId()));
 
-
         // Allow updating to any road (multiple horse services per road is allowed)
-
         horse.setOwnerName(dto.getOwnerName());
         horse.setContactInfo(dto.getContactInfo());
         horse.setInitialPlace(dto.getInitialPlace());

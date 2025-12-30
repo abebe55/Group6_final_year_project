@@ -1,8 +1,8 @@
 {
-  "/admin/audit/page": "app/admin/audit/page.js",
-  "/admin/hotels/page": "app/admin/hotels/page.js",
-  "/admin/users/page": "app/admin/users/page.js",
-  "/admin/tourisms/page": "app/admin/tourisms/page.js",
-  "/admin/bookings/page": "app/admin/bookings/page.js",
-  "/admin/mappoints/page": "app/admin/mappoints/page.js"
+  "/page": "app/page.js",
+  "/owner/bookings/page": "app/owner/bookings/page.js",
+  "/tourisms/page": "app/tourisms/page.js",
+  "/bookings/page": "app/bookings/page.js",
+  "/owner/dashboard/page": "app/owner/dashboard/page.js",
+  "/auth/login/page": "app/auth/login/page.js"
 }

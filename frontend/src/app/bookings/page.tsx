@@ -19,7 +19,8 @@ export default function ClientBookingsPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   // Form states
-  const [receiptUrl, setReceiptUrl] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const [problemReport, setProblemReport] = useState("");
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -51,19 +52,43 @@ export default function ClientBookingsPage() {
   };
 
   const handleUploadReceipt = async () => {
-    if (!token || !userId || !selectedBooking || !receiptUrl.trim()) return;
+    if (!token || !userId || !selectedBooking || !receiptFile) return;
     try {
       setActionLoading(true);
-      const updated = await BookingService.uploadReceipt(token, selectedBooking.bookingId, receiptUrl, userId);
+      const updated = await BookingService.uploadReceiptFile(token, selectedBooking.bookingId, receiptFile, userId);
       updateBookingInList(updated);
       setSelectedBooking(updated);
-      setReceiptUrl("");
+      setReceiptFile(null);
+      setReceiptPreview(null);
       setShowReceiptModal(false);
       alert("Receipt uploaded successfully! The hotel owner will review it.");
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to upload receipt");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please select an image file (JPG, PNG, GIF, WebP) or PDF');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+      setReceiptFile(file);
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => setReceiptPreview(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        setReceiptPreview(null);
+      }
     }
   };
 
@@ -431,7 +456,7 @@ export default function ClientBookingsPage() {
                   </div>
 
                   {/* Messages */}
-                  <div className="p-8 bg-blue-900">
+                  <div className="p-8 bg-green-900 rounded-b-xl">
                     <h3 className="font-black text-white mb-4 text-xl">💬 Conversation ({selectedBooking.messages?.length || 0})</h3>
                     <div className="space-y-4 max-h-96 overflow-y-auto mb-6 bg-green-300 p-6 rounded-xl shadow-inner [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:bg-gray-300 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-gray-300">
                       {selectedBooking.messages?.length === 0 ? (
@@ -496,31 +521,56 @@ export default function ClientBookingsPage() {
       {showReceiptModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl w-full max-w-md mx-4 shadow-2xl">
-            <div className="p-5 bg-gray-300 rounded-t-xl">
-              <h3 className="text-2xl font-black text-gray-900">📤 Upload Payment Receipt</h3>
+            <div className="p-5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-t-xl">
+              <h3 className="text-2xl font-black text-white">📤 Upload Payment Receipt</h3>
             </div>
             <div className="p-6">
               <p className="text-gray-800 mb-4 font-bold">
-                Enter the URL of your payment receipt image. You can upload the image to a service like Imgur or Google Drive and paste the link here.
+                Select your payment receipt image or PDF file from your device.
               </p>
               <div className="mb-4">
-                <label className="block text-sm font-black text-gray-900 mb-2">Receipt Image URL</label>
-                <input
-                  type="url"
-                  value={receiptUrl}
-                  onChange={(e) => setReceiptUrl(e.target.value)}
-                  className="w-full bg-gray-100 rounded-xl px-4 py-3 focus:ring-2 focus:ring-green-500 font-bold"
-                  placeholder="https://example.com/receipt.jpg"
-                />
+                <label className="block text-sm font-black text-gray-900 mb-2">Receipt File</label>
+                <div className="border-3 border-dashed border-green-400 rounded-xl p-6 text-center hover:bg-green-50 hover:border-green-500 transition-all cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleReceiptFileChange}
+                    className="hidden"
+                    id="receipt-file-input"
+                  />
+                  <label htmlFor="receipt-file-input" className="cursor-pointer block">
+                    {receiptFile ? (
+                      <div>
+                        <div className="text-green-500 text-5xl mb-3">✓</div>
+                        <p className="text-gray-900 font-black text-lg">{receiptFile.name}</p>
+                        <p className="text-gray-600 text-sm font-semibold">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-green-400 text-5xl mb-3">📁</div>
+                        <p className="text-gray-800 font-bold text-lg">Click to select file</p>
+                        <p className="text-gray-500 text-sm font-semibold">JPG, PNG, GIF, WebP or PDF (max 10MB)</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+                {receiptPreview && (
+                  <div className="mt-4">
+                    <img src={receiptPreview} alt="Preview" className="max-h-48 rounded-xl mx-auto border-2 border-green-300 shadow-lg" />
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex gap-3 justify-end p-5 bg-gray-300 rounded-b-xl">
-              <button onClick={() => setShowReceiptModal(false)} className="px-5 py-3 text-gray-800 hover:bg-gray-400 rounded-xl font-black bg-gray-200">
+            <div className="flex gap-3 justify-end p-5 bg-gray-200 rounded-b-xl">
+              <button 
+                onClick={() => { setShowReceiptModal(false); setReceiptFile(null); setReceiptPreview(null); }} 
+                className="px-5 py-3 text-gray-800 hover:bg-gray-300 rounded-xl font-black bg-gray-100 border-2 border-gray-400"
+              >
                 Cancel
               </button>
               <button
                 onClick={handleUploadReceipt}
-                disabled={!receiptUrl.trim() || actionLoading}
+                disabled={!receiptFile || actionLoading}
                 className="bg-green-600 text-white px-5 py-3 rounded-xl font-black hover:bg-green-700 disabled:opacity-50 shadow-md"
               >
                 {actionLoading ? "Uploading..." : "Upload Receipt"}
