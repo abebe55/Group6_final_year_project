@@ -81,7 +81,14 @@ public class HotelBooking extends BaseEntity {
     /* ================= BUSINESS RULE HELPERS ================= */
 
     public boolean canProposeCost() {
-        return "REQUESTED".equals(status.getName()) || "OWNER_ACCEPTED".equals(status.getName());
+        // Allow proposing cost when:
+        // - REQUESTED: initial request from client
+        // - OWNER_ACCEPTED: owner accepted but hasn't set cost yet
+        // - COST_PROPOSED: owner wants to update/change the cost
+        String statusName = status.getName();
+        return "REQUESTED".equals(statusName) || 
+               "OWNER_ACCEPTED".equals(statusName) || 
+               "COST_PROPOSED".equals(statusName);
     }
 
     public boolean canUploadReceipt() {

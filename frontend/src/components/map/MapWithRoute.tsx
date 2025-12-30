@@ -4,7 +4,7 @@ import { MapContainer as LeafletMap, TileLayer, Marker, Popup, Polyline } from "
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { MapPointDto } from "@/types/map";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 
 // Fix for default marker icons in Leaflet with Next.js
 const createIcon = (color: string) => {
@@ -39,6 +39,17 @@ interface Props {
 }
 
 export default function MapWithRoute({ points, roadType, startPlace, endPlace }: Props) {
+  const [isClient, setIsClient] = useState(false);
+  const mapId = useRef(`map-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+
+  useEffect(() => {
+    setIsClient(true);
+    return () => {
+      // Cleanup on unmount
+      setIsClient(false);
+    };
+  }, []);
+
   // Calculate center and bounds
   const getCenter = (): [number, number] => {
     if (points.length === 0) return [11.5, 39.5]; // North Wollo default
@@ -91,61 +102,75 @@ export default function MapWithRoute({ points, roadType, startPlace, endPlace }:
   // Create route line from points
   const routePositions: [number, number][] = points.map(p => [p.latitude, p.longitude]);
 
+  if (!isClient) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing map...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <LeafletMap 
-      center={getCenter()} 
-      zoom={getZoom()} 
-      className="w-full h-full"
-      scrollWheelZoom={true}
-    >
-      <TileLayer
-        attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-
-      {/* Route Line */}
-      {routePositions.length > 1 && (
-        <Polyline
-          positions={routePositions}
-          color={getRouteColor()}
-          weight={4}
-          opacity={0.8}
-          dashArray={roadType === "PLANE" ? "10, 10" : undefined}
+    <div id={mapId.current} className="w-full h-full">
+      <LeafletMap 
+        center={getCenter()} 
+        zoom={getZoom()} 
+        className="w-full h-full"
+        scrollWheelZoom={true}
+        key={mapId.current}
+      >
+        <TileLayer
+          attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-      )}
 
-      {/* Markers */}
-      {points.map((point, index) => (
-        <Marker 
-          key={point.id} 
-          position={[point.latitude, point.longitude]}
-          icon={getIcon(point.type)}
-        >
-          <Popup>
-            <div className="min-w-[200px]">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">
-                  {point.type === "TOURISM" && "🏔️"}
-                  {point.type === "HOTEL" && "🏨"}
-                  {point.type === "ROAD" && "📍"}
-                  {point.type === "HORSE" && "🐎"}
-                </span>
-                <h3 className="font-bold text-gray-900">{point.name}</h3>
-              </div>
-              {point.description && (
-                <p className="text-sm text-gray-600 mb-2">{point.description}</p>
-              )}
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="px-2 py-1 bg-gray-100 rounded-full">{point.type}</span>
-                {index === 0 && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full">Start</span>}
-                {index === points.length - 1 && points.length > 1 && (
-                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">End</span>
+        {/* Route Line */}
+        {routePositions.length > 1 && (
+          <Polyline
+            positions={routePositions}
+            color={getRouteColor()}
+            weight={4}
+            opacity={0.8}
+            dashArray={roadType === "PLANE" ? "10, 10" : undefined}
+          />
+        )}
+
+        {/* Markers */}
+        {points.map((point, index) => (
+          <Marker 
+            key={point.id} 
+            position={[point.latitude, point.longitude]}
+            icon={getIcon(point.type)}
+          >
+            <Popup>
+              <div className="min-w-[200px]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">
+                    {point.type === "TOURISM" && "🏔️"}
+                    {point.type === "HOTEL" && "🏨"}
+                    {point.type === "ROAD" && "📍"}
+                    {point.type === "HORSE" && "🐎"}
+                  </span>
+                  <h3 className="font-bold text-gray-900">{point.name}</h3>
+                </div>
+                {point.description && (
+                  <p className="text-sm text-gray-600 mb-2">{point.description}</p>
                 )}
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className="px-2 py-1 bg-gray-100 rounded-full">{point.type}</span>
+                  {index === 0 && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full">Start</span>}
+                  {index === points.length - 1 && points.length > 1 && (
+                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">End</span>
+                  )}
+                </div>
               </div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </LeafletMap>
+            </Popup>
+          </Marker>
+        ))}
+      </LeafletMap>
+    </div>
   );
 }

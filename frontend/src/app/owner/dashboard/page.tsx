@@ -97,55 +97,66 @@ export default function OwnerDashboardPage() {
     <div className="min-h-screen bg-gray-100">
       <TopBar />
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Back Button */}
+        <button
+          onClick={() => router.push('/')}
+          className="flex items-center gap-2 text-gray-700 hover:text-gray-900 mb-4 transition-colors font-bold"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span>Back to Home</span>
+        </button>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">🏨 Hotel Owner Dashboard</h1>
-            <p className="text-gray-600 mt-1">Manage your hotels and bookings</p>
+            <h1 className="text-3xl font-black text-gray-900">🏨 Hotel Owner Dashboard</h1>
+            <p className="text-gray-700 mt-1 font-semibold">Manage your hotels and bookings</p>
           </div>
           <div className="flex items-center gap-3">
             {role === "HOTEL_OWNER" && <ModeSwitcherCompact />}
-            <button onClick={loadData} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">
+            <button onClick={loadData} className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-black border-2 border-emerald-700">
               🔄 Refresh
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-100 border border-red-300 text-red-700 p-4 rounded-lg mb-6">
+          <div className="bg-red-100 border-2 border-red-400 text-red-700 p-4 rounded-lg mb-6 font-bold">
             {error}
           </div>
         )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-emerald-500">
-            <div className="text-3xl font-bold text-emerald-600">{myHotels.length}</div>
-            <div className="text-gray-600 text-sm">My Hotels</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-emerald-500">
+            <div className="text-3xl font-black text-emerald-600">{myHotels.length}</div>
+            <div className="text-gray-700 text-sm font-bold">My Hotels</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-blue-500">
-            <div className="text-3xl font-bold text-blue-600">{activeHotels}</div>
-            <div className="text-gray-600 text-sm">Active Hotels</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-blue-500">
+            <div className="text-3xl font-black text-blue-600">{activeHotels}</div>
+            <div className="text-gray-700 text-sm font-bold">Active Hotels</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-yellow-500">
-            <div className="text-3xl font-bold text-yellow-600">{pendingCount}</div>
-            <div className="text-gray-600 text-sm">Pending</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-orange-500">
+            <div className="text-3xl font-black text-orange-600">{pendingCount}</div>
+            <div className="text-gray-700 text-sm font-bold">Pending</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-indigo-500">
-            <div className="text-3xl font-bold text-indigo-600">{paidCount}</div>
-            <div className="text-gray-600 text-sm">Awaiting Approval</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-indigo-500">
+            <div className="text-3xl font-black text-indigo-600">{paidCount}</div>
+            <div className="text-gray-700 text-sm font-bold">Awaiting Approval</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-green-500">
-            <div className="text-3xl font-bold text-green-600">{approvedCount}</div>
-            <div className="text-gray-600 text-sm">Approved</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-green-500">
+            <div className="text-3xl font-black text-green-600">{approvedCount}</div>
+            <div className="text-gray-700 text-sm font-bold">Approved</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-gray-500">
-            <div className="text-3xl font-bold text-gray-600">{bookings.length}</div>
-            <div className="text-gray-600 text-sm">Total Bookings</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-gray-500">
+            <div className="text-3xl font-black text-gray-600">{bookings.length}</div>
+            <div className="text-gray-700 text-sm font-bold">Total Bookings</div>
           </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border-l-4 border-red-500">
-            <div className="text-3xl font-bold text-red-600">{problemCount}</div>
-            <div className="text-gray-600 text-sm">Problems</div>
+          <div className="bg-white rounded-xl p-4 shadow-md border-2 border-gray-300 border-l-4 border-l-red-500">
+            <div className="text-3xl font-black text-red-600">{problemCount}</div>
+            <div className="text-gray-700 text-sm font-bold">Problems</div>
           </div>
         </div>
 
@@ -159,8 +170,8 @@ export default function OwnerDashboardPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`px-6 py-3 rounded-lg font-medium transition ${
-                activeTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+              className={`px-6 py-3 rounded-lg font-black transition border-2 ${
+                activeTab === tab.id ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-gray-700 hover:bg-gray-100 border-gray-400'
               }`}
             >
               {tab.label} {tab.count !== null && `(${tab.count})`}
@@ -179,40 +190,40 @@ export default function OwnerDashboardPage() {
               <div className="space-y-6">
                 {/* Urgent Actions */}
                 {(pendingCount > 0 || paidCount > 0 || problemCount > 0) && (
-                  <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-6 text-white">
-                    <h2 className="text-xl font-bold mb-4">⚡ Actions Required</h2>
+                  <div className="bg-purple-600 rounded-xl p-6 text-white border-2 border-purple-700">
+                    <h2 className="text-xl font-black mb-4">⚡ Actions Required</h2>
                     <div className="grid md:grid-cols-3 gap-4">
                       {pendingCount > 0 && (
-                        <div className="bg-white/20 rounded-lg p-4">
-                          <div className="text-3xl font-bold">{pendingCount}</div>
-                          <div className="text-sm opacity-90">New booking requests waiting for your review</div>
+                        <div className="bg-white/20 rounded-lg p-4 border-2 border-white/30">
+                          <div className="text-3xl font-black">{pendingCount}</div>
+                          <div className="text-sm font-bold opacity-90">New booking requests waiting for your review</div>
                           <button 
                             onClick={() => router.push('/owner/bookings')}
-                            className="mt-3 bg-white text-orange-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/90"
+                            className="mt-3 bg-white text-purple-600 px-4 py-2 rounded-lg text-sm font-black hover:bg-white/90 border-2 border-purple-300"
                           >
                             Review Now →
                           </button>
                         </div>
                       )}
                       {paidCount > 0 && (
-                        <div className="bg-white/20 rounded-lg p-4">
-                          <div className="text-3xl font-bold">{paidCount}</div>
-                          <div className="text-sm opacity-90">Payments received - verify receipts</div>
+                        <div className="bg-white/20 rounded-lg p-4 border-2 border-white/30">
+                          <div className="text-3xl font-black">{paidCount}</div>
+                          <div className="text-sm font-bold opacity-90">Payments received - verify receipts</div>
                           <button 
                             onClick={() => router.push('/owner/bookings')}
-                            className="mt-3 bg-white text-orange-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/90"
+                            className="mt-3 bg-white text-purple-600 px-4 py-2 rounded-lg text-sm font-black hover:bg-white/90 border-2 border-purple-300"
                           >
                             Verify Payments →
                           </button>
                         </div>
                       )}
                       {problemCount > 0 && (
-                        <div className="bg-white/20 rounded-lg p-4">
-                          <div className="text-3xl font-bold">{problemCount}</div>
-                          <div className="text-sm opacity-90">Problem reports need attention</div>
+                        <div className="bg-white/20 rounded-lg p-4 border-2 border-white/30">
+                          <div className="text-3xl font-black">{problemCount}</div>
+                          <div className="text-sm font-bold opacity-90">Problem reports need attention</div>
                           <button 
                             onClick={() => router.push('/owner/bookings')}
-                            className="mt-3 bg-white text-red-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/90"
+                            className="mt-3 bg-white text-red-600 px-4 py-2 rounded-lg text-sm font-black hover:bg-white/90 border-2 border-red-300"
                           >
                             View Problems →
                           </button>
@@ -223,47 +234,47 @@ export default function OwnerDashboardPage() {
                 )}
 
                 {/* My Hotels Quick View */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="bg-white rounded-xl shadow-md p-6 border-2 border-gray-300">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900">🏨 My Hotels</h2>
+                    <h2 className="text-xl font-black text-gray-900">🏨 My Hotels</h2>
                     <button 
                       onClick={() => setActiveTab('hotels')}
-                      className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                      className="text-emerald-600 hover:text-emerald-700 text-sm font-black"
                     >
                       View All →
                     </button>
                   </div>
                   {myHotels.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-gray-600">
                       <div className="text-4xl mb-2">🏨</div>
-                      <p>No hotels assigned to you yet.</p>
-                      <p className="text-sm">Contact admin to get a hotel assigned.</p>
+                      <p className="font-bold">No hotels assigned to you yet.</p>
+                      <p className="text-sm font-semibold">Contact admin to get a hotel assigned.</p>
                     </div>
                   ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {myHotels.slice(0, 3).map(hotel => (
                         <div 
                           key={hotel.id}
-                          className="border rounded-lg p-4 hover:shadow-md transition cursor-pointer"
+                          className="border-2 border-gray-300 rounded-lg p-4 hover:shadow-md transition cursor-pointer"
                           onClick={() => router.push(`/hotels/${hotel.id}/booking`)}
                         >
                           <div className="flex items-start gap-3">
-                            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl">
+                            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center text-2xl border-2 border-gray-300">
                               🏨
                             </div>
                             <div className="flex-1">
-                              <h3 className="font-semibold text-gray-900">{hotel.name}</h3>
-                              <div className="text-yellow-500 text-sm">
+                              <h3 className="font-black text-gray-900">{hotel.name}</h3>
+                              <div className="text-amber-500 text-sm font-bold">
                                 {'★'.repeat(hotel.stars || hotel.starRating || 4)}{'☆'.repeat(5 - (hotel.stars || hotel.starRating || 4))}
                               </div>
-                              <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs ${
-                                hotel.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              <span className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-black border ${
+                                hotel.active ? 'bg-green-100 text-green-700 border-green-400' : 'bg-red-100 text-red-700 border-red-400'
                               }`}>
                                 {hotel.active ? '✓ Active' : '✗ Inactive'}
                               </span>
                             </div>
                           </div>
-                          <div className="mt-3 text-sm text-gray-600">
+                          <div className="mt-3 text-sm text-gray-700 font-bold">
                             {bookings.filter(b => b.hotel.id === hotel.id).length} bookings
                           </div>
                         </div>
@@ -273,47 +284,47 @@ export default function OwnerDashboardPage() {
                 </div>
 
                 {/* Recent Bookings */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="bg-white rounded-xl shadow-md p-6 border-2 border-gray-300">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-gray-900">📋 Recent Bookings</h2>
+                    <h2 className="text-xl font-black text-gray-900">📋 Recent Bookings</h2>
                     <button 
                       onClick={() => router.push('/owner/bookings')}
-                      className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                      className="text-emerald-600 hover:text-emerald-700 text-sm font-black"
                     >
                       Manage All →
                     </button>
                   </div>
                   {bookings.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-gray-600">
                       <div className="text-4xl mb-2">📋</div>
-                      <p>No bookings yet.</p>
+                      <p className="font-bold">No bookings yet.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {bookings.slice(0, 5).map(booking => (
                         <div 
                           key={booking.bookingId}
-                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                          className="flex items-center justify-between p-4 border-2 border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                           onClick={() => router.push('/owner/bookings')}
                         >
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-bold">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 font-black border-2 border-emerald-300">
                               {booking.client.fullName?.charAt(0) || '?'}
                             </div>
                             <div>
-                              <div className="font-medium text-gray-900">
+                              <div className="font-black text-gray-900">
                                 {booking.client.fullName} - {booking.hotel.name}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              <div className="text-sm text-gray-600 font-semibold">
                                 {booking.checkIn} → {booking.checkOut} • {booking.numberOfGuests} guests
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             {booking.totalCost && (
-                              <span className="text-green-600 font-medium">{booking.totalCost} ETB</span>
+                              <span className="text-green-600 font-black">{booking.totalCost} ETB</span>
                             )}
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${BookingService.getStatusColor(booking.bookingStatus)}`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-black border ${BookingService.getStatusColor(booking.bookingStatus)}`}>
                               {BookingService.getStatusLabel(booking.bookingStatus)}
                             </span>
                           </div>
@@ -327,27 +338,27 @@ export default function OwnerDashboardPage() {
                 <div className="grid md:grid-cols-3 gap-4">
                   <button
                     onClick={() => router.push('/owner/bookings')}
-                    className="bg-emerald-600 text-white p-6 rounded-xl hover:bg-emerald-700 transition text-left"
+                    className="bg-emerald-600 text-white p-6 rounded-xl hover:bg-emerald-700 transition text-left border-2 border-emerald-700"
                   >
                     <div className="text-3xl mb-2">📋</div>
-                    <div className="font-bold text-lg">Manage Bookings</div>
-                    <div className="text-emerald-100 text-sm">Accept, propose costs, approve payments</div>
+                    <div className="font-black text-lg">Manage Bookings</div>
+                    <div className="text-emerald-100 text-sm font-semibold">Accept, propose costs, approve payments</div>
                   </button>
                   <button
                     onClick={() => setActiveTab('hotels')}
-                    className="bg-blue-600 text-white p-6 rounded-xl hover:bg-blue-700 transition text-left"
+                    className="bg-blue-600 text-white p-6 rounded-xl hover:bg-blue-700 transition text-left border-2 border-blue-700"
                   >
                     <div className="text-3xl mb-2">🏨</div>
-                    <div className="font-bold text-lg">View My Hotels</div>
-                    <div className="text-blue-100 text-sm">See hotel details and manage bookings</div>
+                    <div className="font-black text-lg">View My Hotels</div>
+                    <div className="text-blue-100 text-sm font-semibold">See hotel details and manage bookings</div>
                   </button>
                   <button
                     onClick={() => router.push('/')}
-                    className="bg-purple-600 text-white p-6 rounded-xl hover:bg-purple-700 transition text-left"
+                    className="bg-purple-600 text-white p-6 rounded-xl hover:bg-purple-700 transition text-left border-2 border-purple-700"
                   >
                     <div className="text-3xl mb-2">🌍</div>
-                    <div className="font-bold text-lg">Browse as Client</div>
-                    <div className="text-purple-100 text-sm">Switch to client mode to explore</div>
+                    <div className="font-black text-lg">Browse as Client</div>
+                    <div className="text-purple-100 text-sm font-semibold">Switch to client mode to explore</div>
                   </button>
                 </div>
               </div>
@@ -357,10 +368,10 @@ export default function OwnerDashboardPage() {
             {activeTab === 'hotels' && (
               <div className="space-y-4">
                 {myHotels.length === 0 ? (
-                  <div className="bg-white rounded-xl p-12 text-center">
+                  <div className="bg-white rounded-xl p-12 text-center border-2 border-gray-300">
                     <div className="text-6xl mb-4">🏨</div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">No Hotels Assigned</h3>
-                    <p className="text-gray-600">Contact the administrator to get a hotel assigned to your account.</p>
+                    <h3 className="text-xl font-black text-gray-900 mb-2">No Hotels Assigned</h3>
+                    <p className="text-gray-700 font-semibold">Contact the administrator to get a hotel assigned to your account.</p>
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -370,7 +381,7 @@ export default function OwnerDashboardPage() {
                       const hotelPaid = hotelBookings.filter(b => b.bookingStatus === BOOKING_STATUS.PAID).length;
                       
                       return (
-                        <div key={hotel.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <div key={hotel.id} className="bg-white rounded-xl shadow-md overflow-hidden border-2 border-gray-300">
                           <div className="relative h-40 bg-gradient-to-br from-emerald-500 to-teal-600">
                             {hotel.images?.[0] ? (
                               <Image src={hotel.images[0]} alt={hotel.name} fill className="object-cover" />
@@ -380,41 +391,41 @@ export default function OwnerDashboardPage() {
                               </div>
                             )}
                             <div className="absolute top-3 right-3">
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                hotel.active ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                              <span className={`px-3 py-1 rounded-full text-xs font-black border-2 ${
+                                hotel.active ? 'bg-green-500 text-white border-green-300' : 'bg-red-500 text-white border-red-300'
                               }`}>
                                 {hotel.active ? '✓ Active' : '✗ Inactive'}
                               </span>
                             </div>
                           </div>
                           <div className="p-4">
-                            <h3 className="font-bold text-lg text-gray-900">{hotel.name}</h3>
-                            <div className="text-yellow-500 text-sm mb-2">
+                            <h3 className="font-black text-lg text-gray-900">{hotel.name}</h3>
+                            <div className="text-amber-500 text-sm mb-2 font-bold">
                               {'★'.repeat(hotel.starRating || 4)}{'☆'.repeat(5 - (hotel.starRating || 4))}
                             </div>
                             {hotel.contactInfo && (
-                              <p className="text-gray-600 text-sm mb-3">📞 {hotel.contactInfo}</p>
+                              <p className="text-gray-700 text-sm mb-3 font-semibold">📞 {hotel.contactInfo}</p>
                             )}
                             
                             {/* Hotel Stats */}
                             <div className="grid grid-cols-3 gap-2 mb-4">
-                              <div className="bg-gray-50 p-2 rounded text-center">
-                                <div className="font-bold text-gray-900">{hotelBookings.length}</div>
-                                <div className="text-xs text-gray-500">Total</div>
+                              <div className="bg-gray-100 p-2 rounded text-center border-2 border-gray-300">
+                                <div className="font-black text-gray-900">{hotelBookings.length}</div>
+                                <div className="text-xs text-gray-600 font-bold">Total</div>
                               </div>
-                              <div className="bg-yellow-50 p-2 rounded text-center">
-                                <div className="font-bold text-yellow-600">{hotelPending}</div>
-                                <div className="text-xs text-gray-500">Pending</div>
+                              <div className="bg-orange-100 p-2 rounded text-center border-2 border-orange-300">
+                                <div className="font-black text-orange-600">{hotelPending}</div>
+                                <div className="text-xs text-gray-600 font-bold">Pending</div>
                               </div>
-                              <div className="bg-indigo-50 p-2 rounded text-center">
-                                <div className="font-bold text-indigo-600">{hotelPaid}</div>
-                                <div className="text-xs text-gray-500">To Approve</div>
+                              <div className="bg-indigo-100 p-2 rounded text-center border-2 border-indigo-300">
+                                <div className="font-black text-indigo-600">{hotelPaid}</div>
+                                <div className="text-xs text-gray-600 font-bold">To Approve</div>
                               </div>
                             </div>
                             
                             <button
                               onClick={() => router.push(`/hotels/${hotel.id}/booking`)}
-                              className="w-full bg-emerald-600 text-white py-2 rounded-lg font-medium hover:bg-emerald-700 transition"
+                              className="w-full bg-emerald-600 text-white py-2 rounded-lg font-black hover:bg-emerald-700 transition border-2 border-emerald-700"
                             >
                               Manage Bookings →
                             </button>
@@ -429,53 +440,53 @@ export default function OwnerDashboardPage() {
 
             {/* Bookings Tab */}
             {activeTab === 'bookings' && (
-              <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="bg-white rounded-xl shadow-md p-6 border-2 border-gray-300">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">All Bookings</h2>
+                  <h2 className="text-xl font-black text-gray-900">All Bookings</h2>
                   <button
                     onClick={() => router.push('/owner/bookings')}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700"
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-black border-2 border-emerald-700"
                   >
                     Open Full Manager →
                   </button>
                 </div>
                 
                 {bookings.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-gray-600">
                     <div className="text-6xl mb-4">📋</div>
-                    <p>No bookings yet.</p>
+                    <p className="font-bold">No bookings yet.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-100 border-2 border-gray-300">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hotel</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guests</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Hotel</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Client</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Dates</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Guests</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Cost</th>
+                          <th className="px-4 py-3 text-left text-xs font-black text-gray-700 uppercase">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y-2 divide-gray-200">
                         {bookings.map(b => (
                           <tr 
                             key={b.bookingId} 
                             className="hover:bg-gray-50 cursor-pointer"
                             onClick={() => router.push('/owner/bookings')}
                           >
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">#{b.bookingId}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{b.hotel.name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{b.client.fullName}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{b.checkIn} → {b.checkOut}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{b.numberOfGuests}</td>
-                            <td className="px-4 py-3 text-sm text-green-600 font-medium">
+                            <td className="px-4 py-3 text-sm font-black text-gray-900">#{b.bookingId}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{b.hotel.name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{b.client.fullName}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{b.checkIn} → {b.checkOut}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700 font-semibold">{b.numberOfGuests}</td>
+                            <td className="px-4 py-3 text-sm text-green-600 font-black">
                               {b.totalCost ? `${b.totalCost} ETB` : '-'}
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${BookingService.getStatusColor(b.bookingStatus)}`}>
+                              <span className={`px-2 py-1 rounded-full text-xs font-black border ${BookingService.getStatusColor(b.bookingStatus)}`}>
                                 {b.bookingStatus}
                               </span>
                             </td>

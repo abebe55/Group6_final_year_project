@@ -90,11 +90,14 @@ export interface Hotel {
   name: string;
   description?: string;
   starRating?: number;
+  stars?: number;  // Backend returns 'stars' instead of 'starRating'
   contactInfo?: string;
   policies?: string;
   images: string[];
   viewersCount?: number;
   tourismId?: number;
+  tourismPlaceId?: number;  // Backend returns this property
+  tourismPlaceName?: string;
   ownerId?: number;
   ownerName?: string;
   active?: boolean;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Modal from "@/components/common/Modal";
 import LoginForm from "@/app/auth/login/page";
 import RegisterForm from "@/app/auth/register/page";
@@ -16,6 +16,7 @@ interface Props {
   transparent?: boolean;
   categories?: string[];
   onCategoryToggle?: (category: string) => void;
+  liveSearch?: boolean; // Enable real-time search as you type
 }
 
 const CATEGORIES = [
@@ -27,12 +28,44 @@ const CATEGORIES = [
   { id: "MODERN", icon: "🏛️", label: "Modern" },
 ];
 
-export default function TopBar({ keyword = "", onSearch, showCategories = true, transparent = false, categories: selectedCategories, onCategoryToggle }: Props) {
+// Debounce hook for live search
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+export default function TopBar({ keyword = "", onSearch, showCategories = true, transparent = false, categories: selectedCategories, onCategoryToggle, liveSearch = false }: Props) {
   const [openMenu, setOpenMenu] = useState(false);
   const [modalContent, setModalContent] = useState<"login" | "register" | null>(null);
   const [searchValue, setSearchValue] = useState(keyword);
   const router = useRouter();
   const { isAuthenticated, username, role, browsingMode, logout } = useAuthStore();
+
+  // Debounced search value for live search (300ms delay)
+  const debouncedSearchValue = useDebounce(searchValue, 300);
+
+  // Update search value when keyword prop changes
+  useEffect(() => {
+    setSearchValue(keyword);
+  }, [keyword]);
+
+  // Live search effect - triggers when debounced value changes
+  useEffect(() => {
+    if (liveSearch && onSearch) {
+      onSearch(debouncedSearchValue);
+    }
+  }, [debouncedSearchValue, liveSearch, onSearch]);
 
   const handleLogout = async () => {
     await logout();
@@ -49,13 +82,23 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
     }
   };
 
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
+    
+    // If not using live search with onSearch callback, navigate immediately for empty search
+    if (!liveSearch && !onSearch && value === '') {
+      router.push('/tourisms');
+    }
+  };
+
   const handleCategoryClick = (categoryId: string) => {
     router.push(`/tourisms?categories=${categoryId}`);
   };
 
   return (
     <>
-      <header className={`sticky top-0 z-50 ${transparent ? 'bg-white/90 backdrop-blur-lg' : 'bg-white'} shadow-md border-b border-gray-200`}>
+      <header className={`sticky top-0 z-50 ${transparent ? 'bg-gradient-to-r from-slate-900/95 via-blue-900/90 to-slate-900/95 backdrop-blur-lg' : 'bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900'} shadow-md border-b border-blue-800/50`}>
         {/* Main Nav */}
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
@@ -64,7 +107,7 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg group-hover:scale-105 transition-transform">
                 NW
               </div>
-              <span className="hidden sm:block font-bold text-gray-900 text-lg">North Wollo</span>
+              <span className="hidden sm:block font-bold text-white text-lg">North Wollo</span>
             </Link>
 
             {/* Search Bar - Desktop */}
@@ -73,26 +116,40 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                 <input
                   type="text"
                   value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
+                  onChange={handleSearchInputChange}
                   placeholder="Search destinations..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-100 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:border-emerald-500 transition-all text-sm text-gray-900 placeholder-gray-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-blue-700/50 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white/20 focus:border-emerald-500 transition-all text-sm text-white placeholder-blue-200/70"
                 />
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+                {searchValue && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchValue('');
+                      if (onSearch) onSearch('');
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </form>
 
             {/* Quick Links */}
             <nav className="hidden lg:flex items-center gap-1">
-              <Link href="/tourisms" className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-100 rounded-lg transition-colors">
+              <Link href="/tourisms" className="px-3 py-2 text-sm font-medium text-blue-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                 Explore
               </Link>
-              <Link href="/hotels" className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-100 rounded-lg transition-colors">
-                Hotels
+              <Link href="/hotels" className="px-3 py-2 text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg transition-colors flex items-center gap-1">
+                <span>🏨</span> Hotels
               </Link>
-              <Link href="/map" className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-100 rounded-lg transition-colors">
-                Map
+              <Link href="/roads" className="px-3 py-2 text-sm font-medium text-blue-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                Roads
               </Link>
             </nav>
 
@@ -107,18 +164,18 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                   
                   {/* Role-based quick access */}
                   {role === "ADMIN" && (
-                    <Link href="/admin" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                    <Link href="/admin" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-blue-300 hover:bg-white/10 rounded-lg transition-colors">
                       <span>⚙️</span> Admin
                     </Link>
                   )}
                   {role === "HOTEL_OWNER" && browsingMode === "OWNER" && (
-                    <Link href="/owner/dashboard" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition-colors">
+                    <Link href="/owner/dashboard" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-orange-300 hover:bg-white/10 rounded-lg transition-colors">
                       <span>🏨</span> Owner Dashboard
                     </Link>
                   )}
                   {/* My Bookings link for all authenticated users (clients) */}
                   {(role === "CLIENT" || (role === "HOTEL_OWNER" && browsingMode === "CLIENT")) && (
-                    <Link href="/bookings" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors">
+                    <Link href="/bookings" className="hidden sm:flex items-center gap-1 px-3 py-2 text-sm font-medium text-purple-300 hover:bg-white/10 rounded-lg transition-colors">
                       <span>📋</span> My Bookings
                     </Link>
                   )}
@@ -127,13 +184,13 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                   <div className="relative">
                     <button
                       onClick={() => setOpenMenu(!openMenu)}
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors border border-gray-300"
+                      className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors border border-blue-700/50"
                     >
                       <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
                         {username?.charAt(0).toUpperCase() || 'U'}
                       </div>
-                      <span className="hidden sm:block text-sm font-medium text-gray-700 max-w-[100px] truncate">{username}</span>
-                      <svg className={`w-4 h-4 text-gray-500 transition-transform ${openMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <span className="hidden sm:block text-sm font-medium text-white max-w-[100px] truncate">{username}</span>
+                      <svg className={`w-4 h-4 text-blue-300 transition-transform ${openMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
@@ -180,7 +237,7 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                 <>
                   <button
                     onClick={() => setModalContent("login")}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-blue-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                   >
                     Sign In
                   </button>
@@ -198,10 +255,10 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
 
         {/* Categories Bar */}
         {showCategories && (
-          <div className="border-t border-gray-200 bg-gray-50">
+          <div className="border-t border-blue-800/50 bg-slate-800/50">
             <div className="max-w-7xl mx-auto px-4">
               <div className="flex items-center gap-1 py-2 overflow-x-auto scrollbar-hide">
-                <span className="text-xs font-medium text-gray-500 mr-2 whitespace-nowrap">Categories:</span>
+                <span className="text-xs font-medium text-blue-300 mr-2 whitespace-nowrap">Categories:</span>
                 {CATEGORIES.map((cat) => {
                   const isSelected = selectedCategories?.includes(cat.id);
                   return (
@@ -211,7 +268,7 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full transition-all whitespace-nowrap ${
                         isSelected 
                           ? 'bg-emerald-600 text-white' 
-                          : 'text-gray-700 hover:text-emerald-600 hover:bg-gray-200'
+                          : 'text-blue-100 hover:text-white hover:bg-white/10'
                       }`}
                     >
                       <span>{cat.icon}</span>
@@ -221,7 +278,7 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
                 })}
                 <Link
                   href="/tourisms"
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-all whitespace-nowrap ml-auto"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-full transition-all whitespace-nowrap ml-auto"
                 >
                   View All →
                 </Link>
@@ -236,13 +293,15 @@ export default function TopBar({ keyword = "", onSearch, showCategories = true, 
         {modalContent === "login" && (
           <LoginForm 
             onSuccess={() => setModalContent(null)} 
-            onRegisterClick={() => setModalContent("register")} 
+            onRegisterClick={() => setModalContent("register")}
+            onCancel={() => setModalContent(null)}
           />
         )}
         {modalContent === "register" && (
           <RegisterForm 
             onSuccess={() => setModalContent(null)} 
-            onLoginClick={() => setModalContent("login")} 
+            onLoginClick={() => setModalContent("login")}
+            onCancel={() => setModalContent(null)}
           />
         )}
       </Modal>

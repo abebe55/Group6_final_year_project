@@ -32,6 +32,25 @@ export async function getHotelsByTourism(
   return Array.isArray(data) ? data : data?.data ?? [];
 }
 
+// 🔹 Get all hotels (no tourism filter)
+export async function getAllHotels(
+  token?: string | null
+): Promise<HotelSummaryDto[]> {
+  const res = await fetch(`${API_BASE_URL}/hotels`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) throw new Error(`Failed to fetch hotels (${res.status})`);
+  const data = await res.json();
+  // Handle both array response and paginated response
+  if (Array.isArray(data)) return data;
+  if (data?.content && Array.isArray(data.content)) return data.content;
+  return data?.data ?? [];
+}
+
 // 🔹 Get hotel detail
 export async function getHotelDetails(
   hotelId: number,
@@ -160,6 +179,7 @@ export async function hasUserRatedHotel(hotelId: number, token: string): Promise
  */
 export default {
   getHotelsByTourism,
+  getAllHotels,
   getHotelDetails,
   getHotelDetail,
   fetchHotelDetail,

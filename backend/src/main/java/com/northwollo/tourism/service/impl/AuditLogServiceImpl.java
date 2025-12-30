@@ -2,12 +2,15 @@ package com.northwollo.tourism.service.impl;
 
 import com.northwollo.tourism.entity.AuditLogEntry;
 import com.northwollo.tourism.repository.AuditLogRepository;
+import com.northwollo.tourism.repository.specification.AuditLogSpecification;
 import com.northwollo.tourism.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -185,8 +188,17 @@ public class AuditLogServiceImpl implements AuditLogService {
     public Page<AuditLogEntry> searchAuditLogs(Long userId, String username, String action, String resourceType,
                                               String category, String severity, String ipAddress,
                                               LocalDateTime startTime, LocalDateTime endTime, Pageable pageable) {
-        return auditLogRepository.findByMultipleCriteria(userId, username, action, resourceType, category,
-                severity, ipAddress, startTime, endTime, pageable);
+        // Use JPA Specifications to build dynamic query - avoids PostgreSQL parameter type inference issues
+        Specification<AuditLogEntry> spec = AuditLogSpecification.buildSearchSpecification(
+                userId, username, action, resourceType, category, severity, ipAddress, startTime, endTime);
+        
+        // Ensure sorting by timestamp descending
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(), 
+                pageable.getPageSize(), 
+                Sort.by(Sort.Direction.DESC, "timestamp"));
+        
+        return auditLogRepository.findAll(spec, sortedPageable);
     }
 
     @Override

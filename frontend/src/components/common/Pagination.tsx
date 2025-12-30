@@ -78,21 +78,21 @@ export default function Pagination({
     <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 ${className}`}>
       {/* Info Section */}
       {showInfo && (
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span>
-            Showing <span className="font-semibold text-gray-900">{startItem}</span> to{' '}
-            <span className="font-semibold text-gray-900">{endItem}</span> of{' '}
-            <span className="font-semibold text-gray-900">{totalElements.toLocaleString()}</span> results
+        <div className="flex items-center gap-4 text-sm text-white">
+          <span className="font-bold">
+            Showing <span className="font-black text-emerald-300">{startItem}</span> to{' '}
+            <span className="font-black text-emerald-300">{endItem}</span> of{' '}
+            <span className="font-black text-emerald-300">{totalElements.toLocaleString()}</span> results
           </span>
           
           {/* Page Size Selector */}
           {showPageSizeSelector && onPageSizeChange && (
             <div className="flex items-center gap-2">
-              <span className="text-gray-500">Show:</span>
+              <span className="text-white font-bold">Show:</span>
               <select
                 value={pageSize}
                 onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-gray-900 cursor-pointer"
+                className="border-2 border-emerald-500 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-slate-800 text-white font-black cursor-pointer"
               >
                 {pageSizeOptions.map((size) => (
                   <option key={size} value={size}>
@@ -112,11 +112,11 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(0)}
             disabled={currentPage === 0}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            className="p-2 rounded-lg text-white hover:bg-emerald-700 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             title="First page"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
             </svg>
           </button>
 
@@ -124,11 +124,11 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 0}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            className="p-2 rounded-lg text-white hover:bg-emerald-700 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             title="Previous page"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
 
@@ -136,17 +136,17 @@ export default function Pagination({
           <div className="flex items-center gap-1 mx-2">
             {getPageNumbers().map((page, index) => (
               page === '...' ? (
-                <span key={`ellipsis-${index}`} className="px-2 py-1 text-gray-400">
+                <span key={`ellipsis-${index}`} className="px-2 py-1 text-white font-bold">
                   •••
                 </span>
               ) : (
                 <button
                   key={page}
                   onClick={() => onPageChange(page as number)}
-                  className={`min-w-[40px] h-10 rounded-lg text-sm font-medium transition-all ${
+                  className={`min-w-[40px] h-10 rounded-lg text-sm font-black transition-all ${
                     currentPage === page
-                      ? 'bg-emerald-600 text-white shadow-md'
-                      : 'text-gray-700 hover:bg-gray-200 border border-gray-300'
+                      ? 'bg-emerald-600 text-white shadow-md border-2 border-emerald-400'
+                      : 'text-white hover:bg-emerald-700 border-2 border-slate-500 bg-slate-700'
                   }`}
                 >
                   {(page as number) + 1}
@@ -159,11 +159,11 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages - 1}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            className="p-2 rounded-lg text-white hover:bg-emerald-700 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             title="Next page"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
@@ -171,11 +171,11 @@ export default function Pagination({
           <button
             onClick={() => onPageChange(totalPages - 1)}
             disabled={currentPage >= totalPages - 1}
-            className="p-2 rounded-lg text-gray-500 hover:bg-gray-200 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+            className="p-2 rounded-lg text-white hover:bg-emerald-700 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             title="Last page"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
             </svg>
           </button>
         </nav>

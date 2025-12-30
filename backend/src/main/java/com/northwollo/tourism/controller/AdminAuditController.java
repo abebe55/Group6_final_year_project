@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,7 +37,8 @@ public class AdminAuditController {
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
         
-        Pageable pageable = PageRequest.of(page, size);
+        // Use sorting by timestamp descending
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "timestamp"));
         Page<AuditLogEntry> auditLogs = auditLogService.getAuditLogs(pageable);
         return ResponseEntity.ok(auditLogs);
     }

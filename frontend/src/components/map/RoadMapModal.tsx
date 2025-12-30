@@ -41,10 +41,18 @@ export default function RoadMapModal({
   const [tourismPoints, setTourismPoints] = useState<MapPointDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mapKey, setMapKey] = useState(0); // Key to force map re-mount
 
   useEffect(() => {
     if (isOpen) {
+      setMapKey(prev => prev + 1); // Increment key to force new map instance
       loadMapData();
+    } else {
+      // Reset state when modal closes
+      setMapPoints([]);
+      setTourismPoints([]);
+      setLoading(true);
+      setError(null);
     }
   }, [isOpen, roadId, tourismId]);
 
@@ -171,6 +179,7 @@ export default function RoadMapModal({
               </div>
             ) : (
               <MapWithRoute 
+                key={mapKey}
                 points={allPoints} 
                 roadType={roadType}
                 startPlace={initialPlace}

@@ -65,6 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/guiders/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/ratings/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/hotels/**").permitAll()
+                        
+                        // Uploaded files (receipts, etc.)
+                        .requestMatchers("/uploads/**").permitAll()
 
                         /* =======================
                            👤 AUTHENTICATED USERS

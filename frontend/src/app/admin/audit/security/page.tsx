@@ -100,20 +100,20 @@ const SecurityEventsPage = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-200 container mx-auto px-4 py-8 admin-page">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Security Events</h1>
-        <p className="text-gray-600">Monitor authentication, authorization, and security-related activities</p>
+        <h1 className="text-3xl font-black text-gray-900 mb-2">Security Events</h1>
+        <p className="text-gray-700 font-semibold">Monitor authentication, authorization, and security-related activities</p>
       </div>
 
       {/* Controls */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">Time Range:</label>
+          <label className="text-sm font-black text-gray-800">Time Range:</label>
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(Number(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2"
+            className="border-2 border-gray-400 rounded-lg px-3 py-2 font-bold"
           >
             <option value={1}>Last Hour</option>
             <option value={24}>Last 24 Hours</option>
@@ -124,7 +124,7 @@ const SecurityEventsPage = () => {
 
         <button
           onClick={loadSecurityEvents}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+          className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 font-black border-2 border-blue-300"
         >
           Refresh
         </button>
@@ -135,20 +135,20 @@ const SecurityEventsPage = () => {
         <nav className="flex space-x-8">
           <button
             onClick={() => setActiveTab('security')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-black text-sm ${
               activeTab === 'security'
                 ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-gray-600 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
             Security Events ({securityLogs.length})
           </button>
           <button
             onClick={() => setActiveTab('high-severity')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-black text-sm ${
               activeTab === 'high-severity'
                 ? 'border-red-500 text-red-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-gray-600 hover:text-gray-700 hover:border-gray-300'
             }`}
           >
             High Severity ({highSeverityLogs.length})
@@ -157,24 +157,24 @@ const SecurityEventsPage = () => {
       </div>
 
       {/* Events List */}
-      <div className="bg-white rounded-lg shadow-md">
+      <div className="bg-white rounded-lg shadow-lg border-2 border-gray-300">
         {loading ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading security events...</p>
+            <p className="mt-4 text-gray-700 font-bold">Loading security events...</p>
           </div>
         ) : error ? (
-          <div className="p-8 text-center text-red-600">
+          <div className="p-8 text-center text-red-600 font-bold">
             <p>Error: {error}</p>
             <button
               onClick={loadSecurityEvents}
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              className="mt-4 bg-blue-100 text-blue-700 px-4 py-2 rounded-lg hover:bg-blue-200 font-black border-2 border-blue-300"
             >
               Retry
             </button>
           </div>
         ) : currentLogs.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">
+          <div className="p-8 text-center text-gray-700 font-bold">
             <p>No {activeTab === 'security' ? 'security events' : 'high severity events'} found in the selected time range</p>
           </div>
         ) : (
@@ -188,17 +188,17 @@ const SecurityEventsPage = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 mb-1">
-                        <h3 className="text-lg font-medium text-gray-900">
+                        <h3 className="text-lg font-black text-gray-900">
                           {log.action.replace(/_/g, ' ')}
                         </h3>
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getSeverityBadgeClass(log.severity)}`}>
+                        <span className={`inline-flex px-2 py-1 text-xs font-black rounded-full border ${getSeverityBadgeClass(log.severity)}`}>
                           {log.severity}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-gray-700 font-bold mb-2">
                         {log.description || `${log.action} event`}
                       </p>
-                      <div className="flex flex-wrap items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex flex-wrap items-center space-x-4 text-sm text-gray-600 font-semibold">
                         <span className="flex items-center">
                           <span className="mr-1">{getCategoryIcon(log.category)}</span>
                           {log.category}
@@ -212,12 +212,12 @@ const SecurityEventsPage = () => {
                         )}
                       </div>
                       {log.details && Object.keys(log.details).length > 0 && (
-                        <div className="mt-3 p-3 bg-gray-100 rounded-md">
+                        <div className="mt-3 p-3 bg-gray-100 rounded-lg border border-gray-300">
                           <details>
-                            <summary className="cursor-pointer text-sm font-medium text-gray-700">
+                            <summary className="cursor-pointer text-sm font-black text-gray-700">
                               Event Details
                             </summary>
-                            <pre className="mt-2 text-xs text-gray-600 whitespace-pre-wrap">
+                            <pre className="mt-2 text-xs text-gray-700 whitespace-pre-wrap font-semibold">
                               {JSON.stringify(log.details, null, 2)}
                             </pre>
                           </details>
@@ -226,8 +226,8 @@ const SecurityEventsPage = () => {
                     </div>
                   </div>
                   <div className="flex-shrink-0 text-right">
-                    <p className="text-sm text-gray-500">{formatTimestamp(log.timestamp)}</p>
-                    <p className="text-xs text-gray-400">{new Date(log.timestamp).toLocaleString()}</p>
+                    <p className="text-sm text-gray-600 font-bold">{formatTimestamp(log.timestamp)}</p>
+                    <p className="text-xs text-gray-500 font-semibold">{new Date(log.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -239,17 +239,17 @@ const SecurityEventsPage = () => {
       {/* Summary Stats */}
       {!loading && !error && (
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-blue-50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-blue-900">Total Security Events</h4>
-            <p className="text-2xl font-bold text-blue-600">{securityLogs.length}</p>
+          <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-300">
+            <h4 className="text-sm font-black text-blue-900">Total Security Events</h4>
+            <p className="text-2xl font-black text-blue-600">{securityLogs.length}</p>
           </div>
-          <div className="bg-red-50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-red-900">High Severity Events</h4>
-            <p className="text-2xl font-bold text-red-600">{highSeverityLogs.length}</p>
+          <div className="bg-red-50 rounded-lg p-4 border-2 border-red-300">
+            <h4 className="text-sm font-black text-red-900">High Severity Events</h4>
+            <p className="text-2xl font-black text-red-600">{highSeverityLogs.length}</p>
           </div>
-          <div className="bg-yellow-50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-yellow-900">Critical Events</h4>
-            <p className="text-2xl font-bold text-yellow-600">
+          <div className="bg-yellow-50 rounded-lg p-4 border-2 border-yellow-300">
+            <h4 className="text-sm font-black text-yellow-900">Critical Events</h4>
+            <p className="text-2xl font-black text-yellow-600">
               {currentLogs.filter(log => log.severity === 'CRITICAL').length}
             </p>
           </div>

@@ -158,12 +158,22 @@ const UsersManagementPage = () => {
     try {
       setHotelsLoading(true);
       const response = await AdminHotelService.getAllHotels(token, 0, 100);
-      // Filter hotels: without owners AND matching tourism place if selected
-      let availableHotels = response.content.filter(h => !h.ownerId);
+      console.log('All hotels loaded:', response.content);
+      console.log('Looking for tourismId:', tourismId);
+      
+      // Filter hotels by tourism place (show ALL hotels, not just those without owners)
+      // Backend returns tourismPlaceId, not tourismId
+      let filteredHotels = response.content;
+      
       if (tourismId) {
-        availableHotels = availableHotels.filter(h => h.tourismId === tourismId);
+        filteredHotels = filteredHotels.filter(h => {
+          const matches = h.tourismPlaceId === tourismId || h.tourismId === tourismId;
+          console.log(`Hotel ${h.name}: tourismPlaceId=${h.tourismPlaceId}, tourismId=${h.tourismId}, matches=${matches}`);
+          return matches;
+        });
       }
-      setHotels(availableHotels);
+      console.log('Filtered hotels:', filteredHotels);
+      setHotels(filteredHotels);
     } catch (err) {
       console.error('Failed to load hotels:', err);
     } finally {
@@ -213,10 +223,10 @@ const UsersManagementPage = () => {
 
   const getRoleBadgeColor = (r: string) => {
     switch (r) { 
-      case 'ADMIN': return 'bg-purple-500 text-white border-purple-600'; 
-      case 'HOTEL_OWNER': return 'bg-blue-500 text-white border-blue-600'; 
-      case 'CLIENT': return 'bg-amber-500 text-white border-amber-600'; 
-      default: return 'bg-gray-500 text-white border-gray-600'; 
+      case 'ADMIN': return 'bg-purple-50 text-purple-700 border-purple-200 font-black'; 
+      case 'HOTEL_OWNER': return 'bg-blue-50 text-blue-700 border-blue-200 font-black'; 
+      case 'CLIENT': return 'bg-amber-50 text-amber-700 border-amber-200 font-black'; 
+      default: return 'bg-gray-50 text-gray-700 border-gray-200 font-black'; 
     }
   };
 
@@ -229,26 +239,20 @@ const UsersManagementPage = () => {
   if (!isAuthenticated || role !== 'ADMIN') return <div className="p-8 text-center">Access denied.</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Light background */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-900/20 via-transparent to-transparent"></div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-900/20 via-transparent to-transparent"></div>
-      </div>
-      
+    <div className="min-h-screen bg-gray-200 admin-page">
       <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
+      <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
         <button
           onClick={() => router.push('/admin')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+          className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span className="font-medium">Back to Dashboard</span>
+          <span className="font-bold">Back to Dashboard</span>
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">👥 User Management</h1>
-        <p className="text-gray-600">Manage user accounts, roles, and permissions</p>
+        <h1 className="text-3xl font-black text-white mb-2">👥 User Management</h1>
+        <p className="text-blue-200 font-semibold">Manage user accounts, roles, and permissions</p>
       </div>
 
       {/* Success/Error Messages */}
@@ -264,85 +268,85 @@ const UsersManagementPage = () => {
       )}
 
       {/* Search Bar */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6 border border-gray-200">
+      <div className="bg-blue-100 rounded-xl shadow-xl p-6 mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex-1 max-w-lg flex gap-2">
             <div className="relative flex-1">
-              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input type="text" placeholder="Search by name, email, username..." value={searchInput} 
                 onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleKeyDown} 
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 text-gray-900 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                className="w-full pl-10 pr-4 py-2 bg-white border-2 border-blue-300 text-gray-900 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold shadow-sm" />
             </div>
             <FormButton variant="primary" onClick={handleSearch}>Search</FormButton>
             {searchTerm && <FormButton variant="secondary" onClick={handleClearSearch}>Clear</FormButton>}
           </div>
-          <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2 rounded-lg border border-gray-200">
+          <div className="text-sm text-gray-900 bg-white px-4 py-2 rounded-lg shadow-md font-bold">
             {searchTerm && <span className="mr-2">Results for &quot;{searchTerm}&quot;:</span>}
-            Total: <span className="font-semibold text-emerald-600">{totalElements}</span>
+            Total: <span className="font-black text-blue-700">{totalElements}</span>
           </div>
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+      <div className="bg-indigo-100 rounded-xl shadow-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading users...</p>
+          <div className="p-8 text-center bg-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-4 text-gray-800 font-bold">Loading users...</p>
           </div>
         ) : users.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">
-            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="p-8 text-center text-gray-800 bg-white">
+            <svg className="mx-auto h-12 w-12 text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-            <p className="text-lg">{searchTerm ? `No users found for "${searchTerm}"` : 'No users found'}</p>
+            <p className="text-lg font-black">{searchTerm ? `No users found for "${searchTerm}"` : 'No users found'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-indigo-200">
+              <thead className="bg-indigo-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('username')}>
+                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('username')}>
                     User <SortIcon field="username" />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('email')}>
+                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('email')}>
                     Email <SortIcon field="email" />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Roles</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('active')}>
+                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider">Roles</th>
+                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('active')}>
                     Status <SortIcon field="active" />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
+                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider sticky right-0 bg-indigo-200">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-indigo-100 bg-white">
                 {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <tr key={user.id} className="hover:bg-indigo-50 transition-colors group">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-                          <span className="text-white font-medium">{user.fullName?.charAt(0) || user.username?.charAt(0) || '?'}</span>
+                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                          <span className="text-white font-black text-sm">{user.fullName?.charAt(0) || user.username?.charAt(0) || '?'}</span>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.fullName || 'N/A'}</div>
-                          <div className="text-sm text-gray-500">@{user.username}</div>
+                        <div className="ml-2">
+                          <div className="text-sm font-black text-gray-900">{user.fullName || 'N/A'}</div>
+                          <div className="text-xs text-indigo-700 font-bold">@{user.username}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{user.email}</div>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 font-bold">{user.email}</div>
                       <div className="text-xs">
                         {user.emailVerified ? (
-                          <span className="text-emerald-600 flex items-center gap-1">
+                          <span className="text-emerald-700 flex items-center gap-1 font-black">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                             </svg>
                             Verified
                           </span>
                         ) : (
-                          <span className="text-yellow-600 flex items-center gap-1">
+                          <span className="text-yellow-700 flex items-center gap-1 font-black">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
@@ -351,42 +355,42 @@ const UsersManagementPage = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         {user.roles?.map((r) => (
-                          <span key={r} className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(r.replace('ROLE_', ''))}`}>
+                          <span key={r} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black border-2 shadow-sm ${getRoleBadgeColor(r.replace('ROLE_', ''))}`}>
                             {r.replace('ROLE_', '')}
                             <button onClick={() => handleRevokeRole(user.id, r.replace('ROLE_', ''))} 
-                              className="ml-1 hover:text-red-200 transition-colors" title="Revoke role">×</button>
+                              className="ml-1 hover:text-red-600 transition-colors text-xs font-black" title="Revoke role">×</button>
                           </span>
                         ))}
                         <button onClick={() => { setSelectedUser(user); setShowRoleModal(true); }} 
-                          className="px-2 py-1 rounded-full text-xs bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors border border-gray-300">
-                          + Add Role
+                          className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-all border-2 border-emerald-300 shadow-sm">
+                          + Add
                         </button>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${user.active ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black shadow-sm ${user.active ? 'bg-emerald-200 text-emerald-800' : 'bg-red-200 text-red-800'}`}>
                         {user.active ? '✓ Active' : '✗ Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-3">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm font-bold sticky right-0 bg-white group-hover:bg-indigo-50">
+                      <div className="flex space-x-2">
                         {user.active ? (
                           <button onClick={() => handleDeactivateUser(user.id)} disabled={actionLoading === user.id} 
-                            className="text-yellow-600 hover:text-yellow-700 font-medium disabled:opacity-50 transition-colors">
-                            {actionLoading === user.id ? 'Processing...' : 'Deactivate'}
+                            className="text-yellow-700 hover:text-yellow-800 font-black disabled:opacity-50 transition-colors text-xs bg-yellow-100 px-2 py-1 rounded shadow-sm">
+                            {actionLoading === user.id ? '...' : 'Deactivate'}
                           </button>
                         ) : (
                           <button onClick={() => handleActivateUser(user.id)} disabled={actionLoading === user.id} 
-                            className="text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50 transition-colors">
-                            {actionLoading === user.id ? 'Processing...' : 'Activate'}
+                            className="text-emerald-700 hover:text-emerald-800 font-black disabled:opacity-50 transition-colors text-xs bg-emerald-100 px-2 py-1 rounded shadow-sm">
+                            {actionLoading === user.id ? '...' : 'Activate'}
                           </button>
                         )}
                         <button onClick={() => handleDeleteUser(user.id)} disabled={actionLoading === user.id} 
-                          className="text-red-600 hover:text-red-700 font-medium disabled:opacity-50 transition-colors">
-                          Delete
+                          className="text-red-700 hover:text-red-800 font-black disabled:opacity-50 transition-colors text-xs bg-red-100 px-2 py-1 rounded shadow-sm">
+                          {actionLoading === user.id ? '...' : 'Delete'}
                         </button>
                       </div>
                     </td>
@@ -399,7 +403,7 @@ const UsersManagementPage = () => {
       </div>
 
       {/* Pagination */}
-      <div className="mt-6 bg-white rounded-lg shadow-md p-4 border border-gray-200">
+      <div className="mt-6 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-xl shadow-xl p-4 border border-slate-600">
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -492,7 +496,7 @@ const UsersManagementPage = () => {
                         <option value="">-- Select a tourism place --</option>
                         {tourisms.map((tourism) => (
                           <option key={tourism.id} value={tourism.id}>
-                            {tourism.name} - {tourism.location}
+                            {tourism.name} ({tourism.wereda})
                           </option>
                         ))}
                       </select>
@@ -513,22 +517,31 @@ const UsersManagementPage = () => {
                         </div>
                       ) : hotels.length === 0 ? (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-yellow-700 text-sm">⚠️ No available hotels without owners in this location.</p>
+                          <p className="text-yellow-700 text-sm">⚠️ No hotels found in this location.</p>
                           <p className="text-yellow-600 text-xs mt-1">You can still grant the role and assign a hotel later from the Hotels page.</p>
                         </div>
                       ) : (
-                        <select
-                          value={selectedHotelId}
-                          onChange={(e) => setSelectedHotelId(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">-- Select a hotel (optional) --</option>
-                          {hotels.map((hotel) => (
-                            <option key={hotel.id} value={hotel.id}>
-                              {hotel.name} {hotel.starRating ? `(${hotel.starRating}⭐)` : ''}
-                            </option>
-                          ))}
-                        </select>
+                        <>
+                          <select
+                            value={selectedHotelId}
+                            onChange={(e) => setSelectedHotelId(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">-- Select a hotel (optional) --</option>
+                            {hotels.map((hotel) => (
+                              <option key={hotel.id} value={hotel.id}>
+                                {hotel.name} {hotel.starRating || hotel.stars ? `(${hotel.starRating || hotel.stars}⭐)` : ''} 
+                                {hotel.ownerId ? ` - Currently owned by: ${hotel.ownerName || 'User #' + hotel.ownerId}` : ' - No owner'}
+                              </option>
+                            ))}
+                          </select>
+                          {selectedHotelId && hotels.find(h => h.id === selectedHotelId)?.ownerId && (
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                              <p className="text-orange-700 text-sm">⚠️ This hotel already has an owner.</p>
+                              <p className="text-orange-600 text-xs mt-1">Assigning this hotel will transfer ownership from the current owner.</p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -552,7 +565,7 @@ const UsersManagementPage = () => {
                 <div className="space-y-4">
                   <button 
                     onClick={() => setSelectedRole(null)} 
-                    className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1"
+                    className="text-gray-400 hover:text-white text-sm flex items-center gap-1"
                   >
                     ← Back to role selection
                   </button>
@@ -564,7 +577,7 @@ const UsersManagementPage = () => {
                     </p>
                   </div>
                   
-                  <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+                  <div className="flex gap-3 justify-end pt-4 border-t border-gray-700">
                     <FormButton variant="secondary" onClick={() => setSelectedRole(null)}>
                       Back
                     </FormButton>

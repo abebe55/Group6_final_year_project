@@ -127,6 +127,23 @@ export class BookingService {
     return handleResponse<Booking>(response);
   }
 
+  static async uploadReceiptFile(token: string, bookingId: number, file: File, userId: number): Promise<Booking> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${API_BASE_URL}/bookings/${bookingId}/receipt/upload?userId=${userId}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+    return handleResponse<Booking>(response);
+  }
+
   static async reportProblem(token: string, bookingId: number, problem: string, userId: number): Promise<Booking> {
     const response = await fetch(
       `${API_BASE_URL}/bookings/${bookingId}/problem?userId=${userId}`,

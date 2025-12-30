@@ -128,16 +128,16 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
       <div className="w-full max-w-md">
         {/* Header - Compact */}
         <div className="text-center mb-4">
-          <div className="mx-auto h-12 w-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mb-2 shadow-lg">
+          <div className="mx-auto h-12 w-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mb-2 shadow-lg border-2 border-emerald-400">
             <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">Create Account</h2>
+          <h2 className="text-2xl font-black text-gray-900">Create Account</h2>
         </div>
 
         {/* Form Card - Compact */}
-        <div className="bg-white rounded-xl shadow-xl p-5 border border-gray-200">
+        <div className="bg-white rounded-xl shadow-xl p-5 border-2 border-gray-300">
           <form onSubmit={handleSubmit} className="space-y-3">
             {serverError && <Alert type="error" message={serverError} onClose={() => setServerError("")} />}
 
@@ -217,7 +217,7 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
             </div>
 
             {/* Info - Compact */}
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-gray-600 text-center font-semibold">
               You'll receive a verification code via email after registration.
             </p>
 
@@ -226,7 +226,7 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
               <button
                 type="button"
                 onClick={handleCancel}
-                className="flex-1 py-2.5 px-4 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                className="flex-1 py-2.5 px-4 border-2 border-gray-400 text-gray-700 font-bold rounded-lg hover:bg-gray-100 transition-colors"
               >
                 Cancel
               </button>
@@ -234,7 +234,7 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
                 type="submit" 
                 variant="primary" 
                 loading={loading} 
-                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 py-2.5"
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 py-2.5 font-black"
               >
                 Register
               </FormButton>
@@ -243,13 +243,13 @@ export default function RegisterForm({ onSuccess, onLoginClick, onCancel }: Prop
 
           {/* Sign In Link */}
           <div className="mt-4 text-center text-sm">
-            <span className="text-gray-500">Already have an account? </span>
+            <span className="text-gray-600 font-semibold">Already have an account? </span>
             {onLoginClick ? (
-              <button type="button" onClick={onLoginClick} className="text-emerald-600 hover:text-emerald-700 font-medium">
+              <button type="button" onClick={onLoginClick} className="text-emerald-600 hover:text-emerald-700 font-black">
                 Sign In
               </button>
             ) : (
-              <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 font-medium">
+              <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 font-black">
                 Sign In
               </Link>
             )}

@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import TopBar from "@/components/layout/TopBar";
-import TourismCard from "@/components/tourism/TourismCard";
 import LoginForm from "@/app/auth/login/page";
 import RegisterForm from "@/app/auth/register/page";
 import Modal from "@/components/common/Modal";
+import Pagination from "@/components/common/Pagination";
 import { fetchTourismPlaces } from "@/services/tourism.service";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -20,24 +21,37 @@ export interface TourismPublicCard {
   description?: string;
 }
 
+const CATEGORIES = [
+  { id: "HERITAGE", icon: "🕌", label: "Heritage" },
+  { id: "HIGHLAND", icon: "⛰️", label: "Highland" },
+  { id: "CAVERN", icon: "🕳️", label: "Cavern" },
+  { id: "AQUATICS", icon: "🌊", label: "Aquatics" },
+  { id: "CULTURE", icon: "🎭", label: "Culture" },
+  { id: "MODERN", icon: "🏛️", label: "Modern" },
+];
+
 export default function TourismListingPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const categoryParam = searchParams.get("categories") || "";
   const keywordParam = searchParams.get("keyword") || "";
+  const sortByParam = searchParams.get("sortBy") || "viewersCount";
+  const sortDirParam = searchParams.get("sortDir") || "desc";
   const initialCategories = categoryParam ? categoryParam.split(",") : [];
 
   // States
   const [tourismPlaces, setTourismPlaces] = useState<TourismPublicCard[]>([]);
   const [categories, setCategories] = useState<string[]>(initialCategories);
   const [currentKeyword, setCurrentKeyword] = useState(keywordParam);
+  const [sortBy, setSortBy] = useState(sortByParam);
+  const [sortDir, setSortDir] = useState(sortDirParam);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const PAGE_SIZE = 12;
+  const [pageSize, setPageSize] = useState(12);
 
   // Auth state
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
@@ -56,7 +70,9 @@ export default function TourismListingPage() {
         categories, 
         keyword: currentKeyword,
         page,
-        size: PAGE_SIZE 
+        size: pageSize,
+        sortBy,
+        sortDir
       });
 
       const formattedPlaces = (response?.content || []).map((place: any) => ({
@@ -80,49 +96,48 @@ export default function TourismListingPage() {
     } finally {
       setLoading(false);
     }
-  }, [categories, currentKeyword]);
+  }, [categories, currentKeyword, pageSize, sortBy, sortDir]);
 
   useEffect(() => {
     fetchPlaces(0);
-  }, [categories.join(","), currentKeyword, fetchPlaces]);
+  }, [categories.join(","), currentKeyword, pageSize, sortBy, sortDir, fetchPlaces]);
 
   const handleCategoryToggle = useCallback((category: string) => {
     setCategories(prev => {
       const newCategories = prev.includes(category)
         ? prev.filter(c => c !== category)
         : [...prev, category];
-      
-      const params = new URLSearchParams(searchParams);
-      if (newCategories.length > 0) {
-        params.set("categories", newCategories.join(","));
-      } else {
-        params.delete("categories");
-      }
-      if (currentKeyword.trim()) {
-        params.set("keyword", currentKeyword);
-      }
-      router.replace(`?${params.toString()}`, { scroll: false });
-      
       return newCategories;
     });
-  }, [searchParams, currentKeyword, router]);
+  }, []);
 
-  const handleSearch = useCallback((keyword: string) => {
-    setCurrentKeyword(keyword);
-    const params = new URLSearchParams(searchParams);
-    if (keyword.trim()) {
-      params.set("keyword", keyword.trim());
-    } else {
-      params.delete("keyword");
-    }
+  // Update URL when categories change (separate from state update to avoid React warning)
+  useEffect(() => {
+    const params = new URLSearchParams();
     if (categories.length > 0) {
       params.set("categories", categories.join(","));
     }
-    router.replace(`?${params.toString()}`, { scroll: false });
-  }, [searchParams, categories, router]);
+    if (currentKeyword.trim()) {
+      params.set("keyword", currentKeyword);
+    }
+    if (sortBy !== "viewersCount") {
+      params.set("sortBy", sortBy);
+    }
+    if (sortDir !== "desc") {
+      params.set("sortDir", sortDir);
+    }
+    const newUrl = params.toString() ? `/tourisms?${params.toString()}` : "/tourisms";
+    router.replace(newUrl, { scroll: false });
+  }, [categories, currentKeyword, sortBy, sortDir, router]);
+
+  const handleSearch = useCallback((keyword: string) => {
+    setCurrentKeyword(keyword);
+    // URL update is handled by the useEffect above
+  }, []);
 
   const handlePageChange = useCallback((page: number) => {
     fetchPlaces(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [fetchPlaces]);
 
   // Navigation
@@ -160,6 +175,7 @@ export default function TourismListingPage() {
 
   const handleRegisterSuccess = () => {
     setAuthModalOpen(false);
+    setAuthModalContent(null);
     if (pendingNavId) {
       const id = pendingNavId;
       setPendingNavId(null);
@@ -167,138 +183,279 @@ export default function TourismListingPage() {
     }
   };
 
-  const switchToRegister = () => setAuthModalContent("register");
-  const switchToLogin = () => setAuthModalContent("login");
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-indigo-50 to-emerald-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 relative overflow-hidden">
+      {/* Professional gradient background */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-600/20 via-transparent to-transparent"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-teal-600/20 via-transparent to-transparent"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-700/30 via-transparent to-transparent"></div>
+      </div>
+      
+      {/* Animated Background Elements */}
+      <div className="fixed inset-0 -z-20 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-teal-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob animation-delay-2000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-cyan-500 rounded-full mix-blend-multiply filter blur-3xl opacity-5 animate-blob animation-delay-4000" />
+      </div>
+
       <TopBar 
         keyword={currentKeyword} 
         onSearch={handleSearch}
-        categories={categories}
-        onCategoryToggle={handleCategoryToggle}
+        showCategories={false}
       />
 
-      <div className="px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
-        {/* Page title & summary */}
-        <div className="text-center mb-16 lg:mb-24 max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 mb-6 bg-gradient-to-r from-gray-900 to-emerald-900 bg-clip-text leading-tight">
-            Discover North Wollo
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            {categories.length > 0 
-              ? `Showing ${totalElements.toLocaleString()} ${categories.join(", ")} destinations`
-              : currentKeyword
-                ? `Found ${totalElements.toLocaleString()} places matching "${currentKeyword}"`
-                : `Explore ${totalElements.toLocaleString()} amazing tourism places`
-            }
-          </p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        {/* Back Button */}
+        <button
+          onClick={() => router.push('/')}
+          className="flex items-center gap-2 text-white hover:text-emerald-300 mb-4 transition-colors font-bold"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          <span>Back to Home</span>
+        </button>
+
+        {/* Category Filter Pills - Top Position with Green/Black Background */}
+        <div className="bg-gradient-to-r from-emerald-900/90 via-slate-900/95 to-emerald-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border-2 border-emerald-500/50 p-4 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryToggle(cat.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-black transition-all duration-300 shadow-lg hover:scale-105 border-2 ${
+                  categories.includes(cat.id)
+                    ? "bg-emerald-500 text-white shadow-emerald-500/40 border-emerald-300"
+                    : "bg-slate-700 text-white hover:bg-emerald-600 hover:text-white border-slate-500"
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+                {categories.includes(cat.id) && (
+                  <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </button>
+            ))}
+            {categories.length > 0 && (
+              <button
+                onClick={() => {
+                  setCategories([]);
+                  router.replace("/tourisms", { scroll: false });
+                }}
+                className="px-3 py-2 text-sm font-black text-red-300 hover:bg-red-500/30 rounded-xl transition-all border-2 border-red-500"
+              >
+                ✕ Clear
+              </button>
+            )}
+            {/* Sort - Inline */}
+            <div className="ml-auto flex items-center gap-2">
+              <select 
+                value={`${sortBy}-${sortDir}`}
+                onChange={(e) => {
+                  const [newSortBy, newSortDir] = e.target.value.split('-');
+                  setSortBy(newSortBy);
+                  setSortDir(newSortDir);
+                }}
+                className="bg-slate-700 text-white rounded-xl px-3 py-2 text-sm font-black focus:ring-2 focus:ring-emerald-500 shadow-lg cursor-pointer hover:bg-emerald-600 transition-all border-2 border-slate-500"
+              >
+                <option value="viewersCount-desc">Popular</option>
+                <option value="viewersCount-asc">Least Popular</option>
+                <option value="name-asc">A-Z</option>
+                <option value="name-desc">Z-A</option>
+              </select>
+              <span className="px-3 py-2 bg-emerald-500 text-white rounded-xl text-sm font-black border-2 border-emerald-300">
+                {totalElements}
+              </span>
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="mx-auto max-w-4xl mb-8 px-4 py-4 bg-red-50 border border-red-200 rounded-2xl">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-red-800">{error}</p>
-              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 font-medium text-sm">
-                Dismiss
-              </button>
-            </div>
+          <div className="mb-4 px-4 py-3 bg-red-900/40 border border-red-500/50 rounded-xl flex items-center justify-between shadow-xl backdrop-blur-xl">
+            <p className="text-xs font-black text-red-300">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 font-black text-xs px-2 py-1 rounded-lg hover:bg-red-500/20 transition-all">
+              ✕
+            </button>
           </div>
         )}
 
-        {/* Tourism grid */}
+        {/* Tourism Grid - 4 Cards Per Row, Larger */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-            {Array(PAGE_SIZE).fill(0).map((_, i) => (
-              <div key={i} className="w-full h-80 md:h-96 bg-gray-200 animate-pulse rounded-3xl shadow-xl overflow-hidden" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array(pageSize).fill(0).map((_, i) => (
+              <div key={i} className="bg-slate-800/90 rounded-xl shadow-xl overflow-hidden animate-pulse border border-slate-600/50">
+                <div className="h-44 bg-slate-700" />
+                <div className="p-4">
+                  <div className="h-5 bg-slate-700 rounded mb-2 w-3/4" />
+                  <div className="h-4 bg-slate-700 rounded w-1/2" />
+                </div>
+              </div>
             ))}
           </div>
         ) : tourismPlaces.length === 0 ? (
-          <div className="text-center py-24 px-4 max-w-md mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">No Destinations Found</h2>
-            <p className="text-xl text-gray-600 mb-8 leading-relaxed">Try adjusting your search or category filters above.</p>
+          <div className="text-center py-12 px-4 bg-slate-800/80 backdrop-blur-xl rounded-xl border border-slate-600/50 shadow-xl">
+            <div className="text-5xl mb-4">🔍</div>
+            <h2 className="text-xl font-black text-white mb-2">No Destinations Found</h2>
+            <button
+              onClick={() => {
+                setCategories([]);
+                setCurrentKeyword("");
+                router.replace("/tourisms", { scroll: false });
+              }}
+              className="px-5 py-2.5 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-500 transition-all shadow-xl text-sm"
+            >
+              View All
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 mb-16">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {tourismPlaces.map((tourism) => (
-              <TourismCardInteractive
+              <TourismCard
                 key={tourism.id}
                 tourism={tourism}
                 isNavigating={navigatingId === tourism.id}
-                onImageClick={() => requireAuthThenNavigate(tourism.id)}
-                isAuthenticated={isAuthenticated}
+                onClick={() => requireAuthThenNavigate(tourism.id)}
               />
             ))}
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex justify-center items-center space-x-4">
-            <button disabled={currentPage === 0} onClick={() => handlePageChange(currentPage - 1)}>Previous</button>
-            <span>Page {currentPage + 1} of {totalPages}</span>
-            <button disabled={currentPage >= totalPages - 1} onClick={() => handlePageChange(currentPage + 1)}>Next</button>
+        {/* Pagination - Compact */}
+        {totalElements > 0 && (
+          <div className="mt-4 pb-4 bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-xl p-3 border border-slate-600/50">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalElements={totalElements}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onPageSizeChange={(size) => { setPageSize(size); fetchPlaces(0); }}
+              pageSizeOptions={[10, 15, 20, 25, 30]}
+            />
           </div>
         )}
       </div>
 
-      {/* Auth modal */}
-      <Modal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setPendingNavId(null); }}>
-        {authModalContent === "login" && <LoginForm onSuccess={handleLoginSuccess} onRegisterClick={switchToRegister} />}
-        {authModalContent === "register" && <RegisterForm onSuccess={handleRegisterSuccess} onLoginClick={switchToLogin} />}
+      {/* Auth Modal */}
+      <Modal isOpen={authModalOpen} onClose={() => { setAuthModalOpen(false); setPendingNavId(null); setAuthModalContent(null); }}>
+        {authModalContent === "login" && (
+          <LoginForm 
+            onSuccess={handleLoginSuccess} 
+            onRegisterClick={() => setAuthModalContent("register")} 
+          />
+        )}
+        {authModalContent === "register" && (
+          <RegisterForm 
+            onSuccess={handleRegisterSuccess} 
+            onLoginClick={() => setAuthModalContent("login")} 
+          />
+        )}
       </Modal>
 
       {navError && (
-        <div className="fixed bottom-6 right-6 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 max-w-sm">
+        <div className="fixed bottom-6 right-6 bg-red-600/90 backdrop-blur-xl text-white px-6 py-4 rounded-2xl shadow-2xl z-50 max-w-sm border-2 border-red-400 font-black">
           {navError}
         </div>
       )}
+
+      {/* CSS for blob animation */}
+      <style jsx>{`
+        @keyframes blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(30px, -50px) scale(1.1); }
+          66% { transform: translate(-20px, 20px) scale(0.9); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+      `}</style>
     </div>
   );
 }
 
-// TourismCardInteractive (unchanged)
-function TourismCardInteractive({ 
+// Tourism Card Component - Larger with Category-Based Background Colors
+function TourismCard({ 
   tourism, 
   isNavigating, 
-  onImageClick, 
-  isAuthenticated 
+  onClick 
 }: { 
   tourism: TourismPublicCard; 
   isNavigating: boolean;
-  onImageClick: () => void;
-  isAuthenticated: boolean;
+  onClick: () => void;
 }) {
+  // Category-based gradient backgrounds for image placeholder
+  const getCategoryBg = (category?: string) => {
+    switch(category) {
+      case 'HERITAGE': return 'bg-gradient-to-br from-amber-800 via-orange-900 to-amber-950';
+      case 'HIGHLAND': return 'bg-gradient-to-br from-emerald-800 via-green-900 to-emerald-950';
+      case 'CAVERN': return 'bg-gradient-to-br from-slate-700 via-gray-800 to-slate-900';
+      case 'AQUATICS': return 'bg-gradient-to-br from-cyan-700 via-blue-800 to-cyan-950';
+      case 'CULTURE': return 'bg-gradient-to-br from-purple-800 via-violet-900 to-purple-950';
+      case 'MODERN': return 'bg-gradient-to-br from-indigo-700 via-blue-900 to-indigo-950';
+      default: return 'bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900';
+    }
+  };
+
   return (
-    <div className="group relative bg-white rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 overflow-hidden hover:-translate-y-2 cursor-pointer h-full flex flex-col">
-      <div 
-        className="relative h-64 md:h-72 lg:h-80 overflow-hidden bg-gray-200"
-        onClick={onImageClick}
-      >
+    <div 
+      onClick={onClick}
+      className="group bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 overflow-hidden cursor-pointer hover:-translate-y-2 border border-slate-600/50 hover:border-emerald-500/70"
+    >
+      {/* Image Section - Larger */}
+      <div className={`relative h-44 overflow-hidden ${getCategoryBg(tourism.category)}`}>
         <img
           src={tourism.imageUrl}
           alt={tourism.name}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        
+        {/* Category Badge */}
+        {tourism.category && (
+          <span className="absolute top-3 left-3 px-3 py-1.5 bg-black/60 backdrop-blur-sm text-white rounded-xl text-xs font-black shadow-lg">
+            {CATEGORIES.find(c => c.id === tourism.category)?.icon} {tourism.category}
+          </span>
+        )}
+        
+        {/* Views Badge */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 bg-black/60 backdrop-blur-sm text-white rounded-xl text-xs font-black shadow-lg">
+          <span>👁️</span>
+          <span>{tourism.viewersCount.toLocaleString()}</span>
+        </div>
+        
+        {/* Loading Overlay */}
         {isNavigating && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <div className="flex flex-col items-center space-y-2 text-white">
-              <div className="w-12 h-12 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-lg font-semibold">Opening details...</span>
-            </div>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center">
+            <div className="w-10 h-10 border-3 border-emerald-400 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
-      </div>
-      <div className="p-6 flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xl md:text-2xl font-bold text-gray-900 line-clamp-2 leading-tight">{tourism.name}</h3>
-          <div className="flex items-center space-x-1 text-emerald-600 font-bold text-lg">
-            <span>👁️</span>
-            <span>{tourism.viewersCount.toLocaleString()}</span>
-          </div>
+
+        {/* Hover Action */}
+        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+          <span className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-black shadow-lg">
+            View →
+          </span>
         </div>
-        {tourism.wereda && <span className="text-sm text-gray-500">{tourism.wereda}</span>}
-        {tourism.category && <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-semibold">{tourism.category}</span>}
+      </div>
+      
+      {/* Content Section - 70% Green, 30% Black gradient */}
+      <div className="p-4 bg-gradient-to-r from-emerald-700/70 via-emerald-600/70 to-slate-900/30">
+        <h3 className="font-black text-base text-white group-hover:text-emerald-200 transition-colors line-clamp-1 mb-1.5">
+          {tourism.name}
+        </h3>
+        {tourism.wereda && (
+          <p className="text-xs text-white/90 font-bold flex items-center gap-1.5">
+            <span className="text-emerald-300">📍</span> 
+            <span className="line-clamp-1">{tourism.wereda}</span>
+          </p>
+        )}
       </div>
     </div>
   );

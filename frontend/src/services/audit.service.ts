@@ -1,6 +1,5 @@
 // frontend/src/services/audit.service.ts
 
-import { api } from "./api";
 import { 
   AuditLogEntry, 
   AuditLogSearchParams, 
@@ -11,6 +10,38 @@ import {
   SuspiciousActivity,
   IntegrityStatus
 } from "../types/audit";
+
+const API_BASE_URL = "/api";
+
+// Helper to get auth headers
+const getAuthHeaders = (token: string) => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
+// Helper to handle API responses
+const handleResponse = async <T>(response: Response): Promise<T> => {
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`❌ Audit API Error ${response.status}:`, errorText);
+    
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        window.location.href = '/auth/login?error=session_expired';
+      }
+    }
+    
+    throw new Error(errorText || `Request failed: ${response.status}`);
+  }
+  
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+  return {} as T;
+};
 
 export class AuditService {
   private static getAuthToken(): string {
@@ -24,14 +55,20 @@ export class AuditService {
   // Get all audit logs with pagination
   static async getAllAuditLogs(page: number = 0, size: number = 20) {
     const token = this.getAuthToken();
-    const response = await api.get<{
+    console.log('📋 Fetching audit logs, page:', page, 'size:', size);
+    
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit?page=${page}&size=${size}`,
+      { headers: getAuthHeaders(token) }
+    );
+    
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit?page=${page}&size=${size}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Search audit logs with multiple criteria
@@ -45,53 +82,68 @@ export class AuditService {
       }
     });
 
-    const response = await api.get<{
+    console.log('🔍 Searching audit logs with params:', queryParams.toString());
+    
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/search?${queryParams.toString()}`,
+      { headers: getAuthHeaders(token) }
+    );
+    
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit/search?${queryParams.toString()}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Get audit logs for a specific user by ID
   static async getAuditLogsByUserId(userId: number, page: number = 0, size: number = 20) {
     const token = this.getAuthToken();
-    const response = await api.get<{
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/user/${userId}?page=${page}&size=${size}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit/user/${userId}?page=${page}&size=${size}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Get audit logs for a specific username
   static async getAuditLogsByUsername(username: string, page: number = 0, size: number = 20) {
     const token = this.getAuthToken();
-    const response = await api.get<{
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/username/${username}?page=${page}&size=${size}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit/username/${username}?page=${page}&size=${size}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Get audit logs for a specific action
   static async getAuditLogsByAction(action: string, page: number = 0, size: number = 20) {
     const token = this.getAuthToken();
-    const response = await api.get<{
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/action/${action}?page=${page}&size=${size}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit/action/${action}?page=${page}&size=${size}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Get audit logs for a specific resource type
@@ -106,87 +158,205 @@ export class AuditService {
       queryParams.append('resourceId', resourceId);
     }
 
-    const response = await api.get<{
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/resource/${resourceType}?${queryParams.toString()}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<{
       content: AuditLogEntry[];
       totalElements: number;
       totalPages: number;
       size: number;
       number: number;
-    }>(`/admin/audit/resource/${resourceType}?${queryParams.toString()}`, token);
-    return response.data;
+    }>(response);
   }
 
   // Get recent security-related audit logs
   static async getRecentSecurityLogs(hours: number = 24) {
     const token = this.getAuthToken();
-    const response = await api.get<AuditLogEntry[]>(`/admin/audit/security?hours=${hours}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/security?hours=${hours}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<AuditLogEntry[]>(response);
   }
 
   // Get high severity audit logs
   static async getHighSeverityLogs(hours: number = 24) {
     const token = this.getAuthToken();
-    const response = await api.get<AuditLogEntry[]>(`/admin/audit/high-severity?hours=${hours}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/high-severity?hours=${hours}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<AuditLogEntry[]>(response);
   }
 
   // Get audit log statistics
-  static async getAuditStatistics(hours: number = 24) {
+  static async getAuditStatistics(hours: number = 24): Promise<AuditStatistics> {
     const token = this.getAuthToken();
-    const response = await api.get<AuditStatistics>(`/admin/audit/statistics?hours=${hours}`, token);
-    return response.data;
+    console.log('📊 Fetching audit statistics for last', hours, 'hours');
+    
+    try {
+      // Fetch statistics
+      const statsResponse = await fetch(
+        `${API_BASE_URL}/admin/audit/statistics?hours=${hours}`,
+        { headers: getAuthHeaders(token) }
+      );
+      const stats = await handleResponse<{
+        actionStatistics: Record<string, number>;
+        resourceTypeStatistics: Record<string, number>;
+        mostActiveUsers: Record<string, number>;
+      }>(statsResponse);
+      
+      // Fetch security logs count
+      const securityResponse = await fetch(
+        `${API_BASE_URL}/admin/audit/security?hours=${hours}`,
+        { headers: getAuthHeaders(token) }
+      );
+      const securityLogs = await handleResponse<AuditLogEntry[]>(securityResponse);
+      
+      // Fetch high severity logs count
+      const highSeverityResponse = await fetch(
+        `${API_BASE_URL}/admin/audit/high-severity?hours=${hours}`,
+        { headers: getAuthHeaders(token) }
+      );
+      const highSeverityLogs = await handleResponse<AuditLogEntry[]>(highSeverityResponse);
+      
+      // Fetch integrity status
+      const integrityResponse = await fetch(
+        `${API_BASE_URL}/admin/audit/integrity/check`,
+        { headers: getAuthHeaders(token) }
+      );
+      const integrityData = await handleResponse<{
+        logsWithoutChecksum: number;
+        integrityStatus: string;
+      }>(integrityResponse);
+      
+      // Calculate total audit logs from action statistics
+      const totalAuditLogs = Object.values(stats.actionStatistics || {}).reduce((sum, count) => sum + count, 0);
+      
+      return {
+        actionStatistics: stats.actionStatistics || {},
+        resourceTypeStatistics: stats.resourceTypeStatistics || {},
+        mostActiveUsers: stats.mostActiveUsers || {},
+        suspiciousActivities: [],
+        totalAuditLogs,
+        securityEvents: securityLogs?.length || 0,
+        highSeverityEvents: highSeverityLogs?.length || 0,
+        integrityStatus: {
+          totalLogs: totalAuditLogs,
+          logsWithoutChecksum: integrityData.logsWithoutChecksum || 0,
+          status: integrityData.integrityStatus || 'UNKNOWN',
+          integrityPercentage: totalAuditLogs > 0 
+            ? Math.round(((totalAuditLogs - (integrityData.logsWithoutChecksum || 0)) / totalAuditLogs) * 100) 
+            : 100
+        }
+      };
+    } catch (error) {
+      console.error('Failed to fetch audit statistics:', error);
+      // Return empty statistics on error
+      return {
+        actionStatistics: {},
+        resourceTypeStatistics: {},
+        mostActiveUsers: {},
+        suspiciousActivities: [],
+        totalAuditLogs: 0,
+        securityEvents: 0,
+        highSeverityEvents: 0,
+        integrityStatus: {
+          totalLogs: 0,
+          logsWithoutChecksum: 0,
+          status: 'UNKNOWN',
+          integrityPercentage: 100
+        }
+      };
+    }
   }
 
   // Find suspicious IP activity
   static async getSuspiciousActivity(hours: number = 24, userThreshold: number = 3, actionThreshold: number = 50) {
     const token = this.getAuthToken();
-    const response = await api.get<SuspiciousActivity[]>(
-      `/admin/audit/suspicious-activity?hours=${hours}&userThreshold=${userThreshold}&actionThreshold=${actionThreshold}`, 
-      token
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/suspicious-activity?hours=${hours}&userThreshold=${userThreshold}&actionThreshold=${actionThreshold}`,
+      { headers: getAuthHeaders(token) }
     );
-    return response.data;
+    return handleResponse<SuspiciousActivity[]>(response);
   }
 
   // Check audit log integrity
-  static async checkIntegrity() {
+  static async checkIntegrity(): Promise<IntegrityStatus> {
     const token = this.getAuthToken();
-    const response = await api.get<IntegrityStatus>(`/admin/audit/integrity/check`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/integrity/check`,
+      { headers: getAuthHeaders(token) }
+    );
+    const data = await handleResponse<{
+      logsWithoutChecksum: number;
+      integrityStatus: string;
+    }>(response);
+    
+    return {
+      totalLogs: 0, // Will be calculated separately if needed
+      logsWithoutChecksum: data.logsWithoutChecksum,
+      status: data.integrityStatus,
+      integrityPercentage: 100 // Will be calculated if totalLogs is known
+    };
   }
 
   // Repair missing checksums in audit logs
-  static async repairIntegrity() {
+  static async repairIntegrity(): Promise<RepairResult> {
     const token = this.getAuthToken();
-    const response = await api.post<RepairResult>(`/admin/audit/integrity/repair`, {}, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/integrity/repair`,
+      { 
+        method: 'POST',
+        headers: getAuthHeaders(token) 
+      }
+    );
+    return handleResponse<RepairResult>(response);
   }
 
   // Export audit logs for archival
   static async exportAuditLogs(days: number = 30, batchSize: number = 1000) {
     const token = this.getAuthToken();
-    const response = await api.get<AuditLogEntry[]>(`/admin/audit/export?days=${days}&batchSize=${batchSize}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/export?days=${days}&batchSize=${batchSize}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<AuditLogEntry[]>(response);
   }
 
   // Cleanup old audit logs
-  static async cleanupOldLogs(daysToKeep: number = 90) {
+  static async cleanupOldLogs(daysToKeep: number = 90): Promise<CleanupResult> {
     const token = this.getAuthToken();
-    const response = await api.del<CleanupResult>(`/admin/audit/cleanup?daysToKeep=${daysToKeep}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/cleanup?daysToKeep=${daysToKeep}`,
+      { 
+        method: 'DELETE',
+        headers: getAuthHeaders(token) 
+      }
+    );
+    return handleResponse<CleanupResult>(response);
   }
 
   // Get user activity count
   static async getUserActivityCount(userId: number, hours: number = 24) {
     const token = this.getAuthToken();
-    const response = await api.get<ActivityCount>(`/admin/audit/activity/user/${userId}?hours=${hours}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/activity/user/${userId}?hours=${hours}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<ActivityCount>(response);
   }
 
   // Get IP address activity count
   static async getIpActivityCount(ipAddress: string, hours: number = 24) {
     const token = this.getAuthToken();
-    const response = await api.get<ActivityCount>(`/admin/audit/activity/ip/${encodeURIComponent(ipAddress)}?hours=${hours}`, token);
-    return response.data;
+    const response = await fetch(
+      `${API_BASE_URL}/admin/audit/activity/ip/${encodeURIComponent(ipAddress)}?hours=${hours}`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<ActivityCount>(response);
   }
 
   // Helper method to format audit log entries for display
@@ -268,7 +438,7 @@ export class AuditService {
         log.timestamp,
         log.severity,
         log.category,
-        `"${log.description || ''}"`
+        `"${(log.description || '').replace(/"/g, '""')}"`
       ].join(','))
     ].join('\n');
 

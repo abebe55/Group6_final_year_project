@@ -90,7 +90,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-200 admin-page">
       {/* Light background */}
       <div className="fixed inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-transparent to-transparent"></div>
@@ -99,20 +99,20 @@ const AdminDashboard = () => {
       
       <div className="container mx-auto px-4 py-8">
       {/* Back Button & Welcome Section */}
-      <div className="mb-8">
+      <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
         <button
           onClick={() => router.push('/')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+          className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span className="font-medium">Back to Home</span>
+          <span className="font-bold">Back to Home</span>
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-black text-white mb-2">
           Welcome back, {username}!
         </h1>
-        <p className="text-gray-600">
+        <p className="text-blue-200 font-semibold">
           Here's what's happening with your North Wollo Tourism platform today.
         </p>
       </div>
@@ -121,29 +121,29 @@ const AdminDashboard = () => {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white rounded-lg shadow-md p-6 animate-pulse border border-gray-200">
+            <div key={i} className="bg-white rounded-lg shadow-lg p-6 animate-pulse border-2 border-gray-300">
               <div className="h-4 bg-gray-200 rounded mb-2"></div>
               <div className="h-8 bg-gray-200 rounded"></div>
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="bg-red-900/30 border border-red-700 rounded-md p-4 mb-8">
+        <div className="bg-red-100 border-2 border-red-300 rounded-md p-4 mb-8">
           <div className="flex">
             <div className="flex-shrink-0">
-              <span className="text-red-400">❌</span>
+              <span className="text-red-600">❌</span>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-300">
+              <h3 className="text-sm font-black text-red-700">
                 Failed to load dashboard data
               </h3>
-              <div className="mt-2 text-sm text-red-400">
+              <div className="mt-2 text-sm text-red-600 font-semibold">
                 <p>{error}</p>
               </div>
               <div className="mt-4">
                 <button
                   onClick={loadDashboardData}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm"
+                  className="bg-red-100 text-red-700 border-2 border-red-300 px-4 py-2 rounded-md hover:bg-red-200 text-sm font-black"
                 >
                   Retry
                 </button>
@@ -153,50 +153,50 @@ const AdminDashboard = () => {
         </div>
       ) : auditStats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="bg-blue-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-2xl">📊</span>
+                <span className="text-3xl">📊</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Events (24h)</p>
-                <p className="text-2xl font-semibold text-gray-900">{auditStats.totalAuditLogs}</p>
+                <p className="text-sm font-extrabold text-gray-800 uppercase tracking-wide">Total Events (24h)</p>
+                <p className="text-3xl font-black text-blue-800">{auditStats.totalAuditLogs}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="bg-yellow-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-2xl">🚨</span>
+                <span className="text-3xl">🚨</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Security Events</p>
-                <p className="text-2xl font-semibold text-yellow-600">{auditStats.securityEvents}</p>
+                <p className="text-sm font-extrabold text-gray-800 uppercase tracking-wide">Security Events</p>
+                <p className="text-3xl font-black text-yellow-700">{auditStats.securityEvents}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="bg-red-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-2xl">⚠️</span>
+                <span className="text-3xl">⚠️</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">High Severity</p>
-                <p className="text-2xl font-semibold text-red-600">{auditStats.highSeverityEvents}</p>
+                <p className="text-sm font-extrabold text-gray-800 uppercase tracking-wide">High Severity</p>
+                <p className="text-3xl font-black text-red-700">{auditStats.highSeverityEvents}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <div className="bg-green-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-2xl">✅</span>
+                <span className="text-3xl">✅</span>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">System Status</p>
-                <p className="text-sm font-semibold text-emerald-600">Operational</p>
+                <p className="text-sm font-extrabold text-gray-800 uppercase tracking-wide">System Status</p>
+                <p className="text-lg font-black text-emerald-700">Operational</p>
               </div>
             </div>
           </div>
@@ -205,23 +205,23 @@ const AdminDashboard = () => {
 
       {/* Quick Actions */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <h2 className="text-2xl font-black text-gray-900 mb-6">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {quickActions.map((action) => (
             <Link
               key={action.name}
               href={action.href}
-              className="bg-white rounded-lg shadow-md p-6 hover:bg-gray-50 transition-all duration-200 border border-gray-200 hover:border-gray-300"
+              className="quick-action-card bg-gray-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-all duration-300 hover:bg-gray-50 hover:-translate-y-1"
             >
               <div className="flex items-center mb-4">
-                <div className={`flex-shrink-0 w-10 h-10 ${action.color} rounded-lg flex items-center justify-center`}>
-                  <span className="text-white text-xl">{action.icon}</span>
+                <div className={`flex-shrink-0 w-16 h-16 ${action.color} rounded-xl flex items-center justify-center shadow-lg`}>
+                  <span className="text-white text-3xl">{action.icon}</span>
                 </div>
                 <div className="ml-4">
-                  <h3 className="text-lg font-medium text-gray-900">{action.name}</h3>
+                  <h3 className="text-xl font-black text-gray-900">{action.name}</h3>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">{action.description}</p>
+              <p className="text-base font-bold text-gray-800">{action.description}</p>
             </Link>
           ))}
         </div>
@@ -231,23 +231,23 @@ const AdminDashboard = () => {
       {auditStats && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Top Actions */}
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Actions (24h)</h3>
+          <div className="bg-indigo-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
+            <h3 className="text-lg font-black text-indigo-900 mb-4">Top Actions (24h)</h3>
             <div className="space-y-3">
               {Object.entries(auditStats.actionStatistics)
                 .sort(([,a], [,b]) => b - a)
                 .slice(0, 5)
                 .map(([action, count]) => (
-                  <div key={action} className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">{action.replace(/_/g, ' ')}</span>
-                    <span className="text-sm font-semibold text-gray-900">{count}</span>
+                  <div key={action} className="flex justify-between items-center bg-white p-2 rounded-lg shadow-sm">
+                    <span className="text-sm text-gray-800 font-bold">{action.replace(/_/g, ' ')}</span>
+                    <span className="text-sm font-black text-indigo-700 bg-indigo-200 px-2 py-1 rounded">{count}</span>
                   </div>
                 ))}
             </div>
             <div className="mt-4">
               <Link
                 href="/admin/audit"
-                className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                className="text-indigo-700 hover:text-indigo-900 text-sm font-black"
               >
                 View all audit logs →
               </Link>
@@ -255,23 +255,23 @@ const AdminDashboard = () => {
           </div>
 
           {/* Resource Activity */}
-          <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Resource Activity (24h)</h3>
+          <div className="bg-purple-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
+            <h3 className="text-lg font-black text-purple-900 mb-4">Resource Activity (24h)</h3>
             <div className="space-y-3">
               {Object.entries(auditStats.resourceTypeStatistics)
                 .sort(([,a], [,b]) => b - a)
                 .slice(0, 5)
                 .map(([resource, count]) => (
-                  <div key={resource} className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">{resource}</span>
-                    <span className="text-sm font-semibold text-gray-900">{count}</span>
+                  <div key={resource} className="flex justify-between items-center bg-white p-2 rounded-lg shadow-sm">
+                    <span className="text-sm text-gray-800 font-bold">{resource}</span>
+                    <span className="text-sm font-black text-purple-700 bg-purple-200 px-2 py-1 rounded">{count}</span>
                   </div>
                 ))}
             </div>
             <div className="mt-4">
               <Link
                 href="/admin/audit/dashboard"
-                className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
+                className="text-purple-700 hover:text-purple-900 text-sm font-black"
               >
                 View detailed analytics →
               </Link>
@@ -284,23 +284,23 @@ const AdminDashboard = () => {
       )}
 
       {/* System Health */}
-      <div className="mt-8 bg-white rounded-lg shadow-md p-6 border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">System Health</h3>
+      <div className="mt-8 bg-emerald-100 rounded-xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
+        <h3 className="text-lg font-black text-emerald-900 mb-4">System Health</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center">
-            <div className="text-3xl mb-2">🟢</div>
-            <p className="text-sm font-medium text-gray-900">Database</p>
-            <p className="text-xs text-gray-500">Connected</p>
+          <div className="text-center p-5 bg-white rounded-xl shadow-lg">
+            <div className="text-4xl mb-2">🟢</div>
+            <p className="text-base font-black text-gray-900">Database</p>
+            <p className="text-sm text-emerald-700 font-bold">Connected</p>
           </div>
-          <div className="text-center">
-            <div className="text-3xl mb-2">🟢</div>
-            <p className="text-sm font-medium text-gray-900">Audit Logging</p>
-            <p className="text-xs text-gray-500">Active</p>
+          <div className="text-center p-5 bg-white rounded-xl shadow-lg">
+            <div className="text-4xl mb-2">🟢</div>
+            <p className="text-base font-black text-gray-900">Audit Logging</p>
+            <p className="text-sm text-emerald-700 font-bold">Active</p>
           </div>
-          <div className="text-center">
-            <div className="text-3xl mb-2">🟢</div>
-            <p className="text-sm font-medium text-gray-900">Security</p>
-            <p className="text-xs text-gray-500">Monitoring</p>
+          <div className="text-center p-5 bg-white rounded-xl shadow-lg">
+            <div className="text-4xl mb-2">🟢</div>
+            <p className="text-base font-black text-gray-900">Security</p>
+            <p className="text-sm text-emerald-700 font-bold">Monitoring</p>
           </div>
         </div>
       </div>

@@ -6,11 +6,13 @@ import com.northwollo.tourism.entity.*;
 import com.northwollo.tourism.repository.*;
 import com.northwollo.tourism.service.BookingService;
 import com.northwollo.tourism.service.EmailService;
+import com.northwollo.tourism.service.FileUploadService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,6 +29,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingStatusRepository statusRepository;
     private final BookingMessageRepository messageRepository;
     private final EmailService emailService;
+    private final FileUploadService fileUploadService;
 
     @Override
     @Transactional
@@ -128,6 +131,40 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
+    public HotelBookingResponseDto uploadReceiptFile(Long bookingId, MultipartFile file, Long userId) {
+        HotelBooking booking = bookingRepository.findByIdAndUserId(bookingId, userId)
+                .orElseThrow(() -> new RuntimeException("Unauthorized"));
+        if (!booking.canUploadReceipt()) throw new RuntimeException("Cannot upload receipt now");
+        
+        // Upload the file and get the URL
+        String receiptUrl = fileUploadService.uploadFile(file, "receipts");
+        
+        BookingStatusEntity paidStatus = statusRepository.findByName("PAID")
+                .orElseThrow(() -> new RuntimeException("Status PAID not found"));
+        booking.setReceiptImageUrl(receiptUrl);
+        booking.setStatus(paidStatus);
+        booking = bookingRepository.save(booking);
+        addMessage(booking, booking.getUser(), "Receipt uploaded", BookingMessage.MessageType.RECEIPT_UPLOADED);
+        
+        // Send email notification to hotel owner
+        if (booking.getHotel().getOwner() != null && booking.getHotel().getOwner().getEmail() != null) {
+            try {
+                emailService.sendReceiptUploadedNotification(
+                    booking.getHotel().getOwner().getEmail(),
+                    booking.getUser().getFullName(),
+                    booking.getHotel().getName(),
+                    booking.getId()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send receipt uploaded notification email: {}", e.getMessage());
+            }
+        }
+        
+        return mapToDto(booking);
+    }
+
+    @Override
+    @Transactional
     public HotelBookingResponseDto reportProblem(Long bookingId, String problem, Long userId) {
         HotelBooking booking = bookingRepository.findByIdAndUserId(bookingId, userId)
                 .orElseThrow(() -> new RuntimeException("Unauthorized"));
@@ -167,8 +204,10 @@ public class BookingServiceImpl implements BookingService {
         HotelBooking booking = getBookingForOwner(bookingId, ownerId);
         if (!"REQUESTED".equals(booking.getStatus().getName())) throw new RuntimeException("Not in REQUESTED status");
         
+        // Status must exist in database - do NOT create dynamically as it causes FK issues
         BookingStatusEntity status = statusRepository.findByName("OWNER_ACCEPTED")
-                .orElseGet(() -> statusRepository.save(BookingStatusEntity.builder().name("OWNER_ACCEPTED").build()));
+                .orElseThrow(() -> new RuntimeException("Booking status 'OWNER_ACCEPTED' not found in database. Please add it to the booking_statuses table."));
+        
         booking.setStatus(status);
         booking = bookingRepository.save(booking);
         addMessage(booking, booking.getHotel().getOwner(), "Request accepted", BookingMessage.MessageType.GENERAL);
