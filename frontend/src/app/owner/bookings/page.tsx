@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
 import TopBar from "@/components/layout/TopBar";
 import { BookingService, Booking, BOOKING_STATUS } from "@/services/booking.service";
 import { ModeSwitcherCompact } from "@/components/common/ModeSwitcher";
+import { API_BASE_URL } from "@/services/api";
 
 export default function OwnerBookingsPage() {
   const router = useRouter();
@@ -24,6 +25,58 @@ export default function OwnerBookingsPage() {
   const [newMessage, setNewMessage] = useState<string>("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  // Helper function to get receipt URL
+  const getReceiptUrl = (receiptImageUrl: string) => {
+    // If it starts with /uploads, use it directly (Next.js proxy will handle it)
+    // Otherwise, return as-is (external URL)
+    return receiptImageUrl;
+  };
+
+  // Download function that handles CORS
+  const handleDownloadReceipt = async () => {
+    if (!selectedBooking?.receiptImageUrl) return;
+    try {
+      const url = getReceiptUrl(selectedBooking.receiptImageUrl);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const extension = selectedBooking.receiptImageUrl.split('.').pop() || 'jpg';
+      link.download = `receipt-booking-${selectedBooking.bookingId}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: open in new tab
+      window.open(getReceiptUrl(selectedBooking.receiptImageUrl), '_blank');
+    }
+  };
+
+  const loadBookings = useCallback(async (showLoading = false) => {
+    if (!token || !userId) return;
+    try {
+      if (showLoading) setLoading(true);
+      setError(null);
+      const data = await BookingService.getOwnerBookings(token, userId);
+      setBookings(data);
+      // Update selected booking with fresh data (to get new messages)
+      if (selectedBooking) {
+        const updated = data.find(b => b.bookingId === selectedBooking.bookingId);
+        if (updated) setSelectedBooking(updated);
+      } else if (data.length > 0) {
+        setSelectedBooking(data[0]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load bookings");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [token, userId, selectedBooking?.bookingId]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -38,25 +91,14 @@ export default function OwnerBookingsPage() {
     if (role === "HOTEL_OWNER" && browsingMode !== "OWNER") {
       setBrowsingMode("OWNER");
     }
-    loadBookings();
-  }, [isAuthenticated, role]);
-
-  const loadBookings = async () => {
-    if (!token || !userId) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await BookingService.getOwnerBookings(token, userId);
-      setBookings(data);
-      if (data.length > 0 && !selectedBooking) {
-        setSelectedBooking(data[0]);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load bookings");
-    } finally {
-      setLoading(false);
-    }
-  };
+    
+    // Initial load with loading indicator
+    loadBookings(true);
+    
+    // Auto-refresh every 10 seconds to get new messages from clients
+    const interval = setInterval(() => loadBookings(false), 10000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, role, token, userId]);
 
   const handleAccept = async (bookingId: number) => {
     if (!token || !userId) return;
@@ -301,10 +343,31 @@ export default function OwnerBookingsPage() {
                   {/* Receipt Image */}
                   {selectedBooking.receiptImageUrl && (
                     <div className="p-6 border-b">
-                      <h3 className="font-semibold text-gray-700 mb-3">🧾 Payment Receipt</h3>
-                      <div className="bg-gray-100 p-4 rounded-lg">
-                        <img src={selectedBooking.receiptImageUrl} alt="Receipt" className="max-w-md rounded-lg border shadow" />
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-gray-700">🧾 Payment Receipt</h3>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setShowReceiptModal(true)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                          >
+                            🔍 View Full Size
+                          </button>
+                          <button
+                            onClick={handleDownloadReceipt}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                          >
+                            ⬇️ Download
+                          </button>
+                        </div>
                       </div>
+                      <img 
+                        src={getReceiptUrl(selectedBooking.receiptImageUrl)} 
+                        alt="Payment Receipt" 
+                        className="w-full rounded-lg border-2 border-gray-300"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect fill="%23f3f4f6" width="400" height="300"/><text x="50%" y="50%" text-anchor="middle" fill="%236b7280">Image failed to load</text></svg>';
+                        }}
+                      />
                     </div>
                   )}
 
@@ -515,6 +578,37 @@ export default function OwnerBookingsPage() {
                 {actionLoading ? "Rejecting..." : "Reject Booking"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Image Modal */}
+      {showReceiptModal && selectedBooking?.receiptImageUrl && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowReceiptModal(false)}
+        >
+          <div className="relative max-w-4xl w-full">
+            <div className="absolute top-0 right-0 -mt-12 flex gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDownloadReceipt(); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium"
+              >
+                ⬇️ Download
+              </button>
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium"
+              >
+                ✕ Close
+              </button>
+            </div>
+            <img 
+              src={getReceiptUrl(selectedBooking.receiptImageUrl)} 
+              alt="Receipt Full Size" 
+              className="w-full h-auto max-h-screen object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         </div>
       )}

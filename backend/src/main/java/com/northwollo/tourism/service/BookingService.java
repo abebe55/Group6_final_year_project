@@ -2,6 +2,7 @@ package com.northwollo.tourism.service;
 
 import com.northwollo.tourism.dto.request.BookingRequestDto;
 import com.northwollo.tourism.dto.response.HotelBookingResponseDto;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -13,6 +14,7 @@ public interface BookingService {
     List<HotelBookingResponseDto> getMyBookings(Long userId);
     HotelBookingResponseDto getBookingById(Long bookingId, Long userId);
     HotelBookingResponseDto uploadReceipt(Long bookingId, String receiptUrl, Long userId);
+    HotelBookingResponseDto uploadReceiptFile(Long bookingId, MultipartFile file, Long userId);
     HotelBookingResponseDto reportProblem(Long bookingId, String problemDescription, Long userId);
     HotelBookingResponseDto sendMessage(Long bookingId, String message, Long userId);
 

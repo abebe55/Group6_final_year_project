@@ -120,17 +120,17 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto h-16 w-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mb-4 shadow-lg">
+          <div className="mx-auto h-16 w-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center mb-4 shadow-lg border-2 border-emerald-400">
             <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
-          <p className="mt-2 text-gray-600">Sign in to North Wollo Tourism</p>
+          <h2 className="text-3xl font-black text-gray-900">Welcome Back</h2>
+          <p className="mt-2 text-gray-600 font-semibold">Sign in to North Wollo Tourism</p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-gray-300">
           <form onSubmit={handleSubmit} className="space-y-5">
             {successMessage && (
               <Alert type="success" message={successMessage} onClose={() => setSuccessMessage("")} />
@@ -179,7 +179,7 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
             <div className="flex items-center justify-between">
               <Link
                 href="/auth/reset-password"
-                className="text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors"
               >
                 Forgot your password?
               </Link>
@@ -191,20 +191,29 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
               loading={loading}
               disabled={!formData.usernameOrEmail.trim() || !formData.password.trim()}
               fullWidth
-              className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 focus:ring-emerald-500 py-3"
+              className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 focus:ring-emerald-500 py-3 font-black"
             >
               Sign In
             </FormButton>
+
+            {/* Cancel Button */}
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="w-full py-3 px-4 border-2 border-gray-400 text-gray-700 font-bold rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Cancel
+            </button>
           </form>
 
           {/* Divider */}
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t-2 border-gray-300"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">New to North Wollo Tourism?</span>
+                <span className="px-4 bg-white text-gray-700 font-bold">New to North Wollo Tourism?</span>
               </div>
             </div>
           </div>
@@ -215,14 +224,14 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
               <button
                 type="button"
                 onClick={onRegisterClick}
-                className="w-full py-3 px-4 border-2 border-emerald-500 text-emerald-600 font-medium rounded-lg hover:bg-emerald-50 transition-colors"
+                className="w-full py-3 px-4 border-2 border-emerald-500 text-emerald-600 font-black rounded-lg hover:bg-emerald-50 transition-colors"
               >
                 Create an Account
               </button>
             ) : (
               <Link
                 href="/auth/register"
-                className="block w-full py-3 px-4 border-2 border-emerald-500 text-emerald-600 font-medium rounded-lg hover:bg-emerald-50 transition-colors text-center"
+                className="block w-full py-3 px-4 border-2 border-emerald-500 text-emerald-600 font-black rounded-lg hover:bg-emerald-50 transition-colors text-center"
               >
                 Create an Account
               </Link>
@@ -231,11 +240,11 @@ export default function LoginForm({ onSuccess, onRegisterClick }: Props) {
         </div>
 
         {/* Footer */}
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p className="mt-6 text-center text-sm text-gray-700 font-bold">
           By signing in, you agree to our{" "}
-          <a href="#" className="text-emerald-400 hover:underline">Terms of Service</a>
+          <a href="#" className="text-emerald-600 hover:underline font-black">Terms of Service</a>
           {" "}and{" "}
-          <a href="#" className="text-emerald-400 hover:underline">Privacy Policy</a>
+          <a href="#" className="text-emerald-600 hover:underline font-black">Privacy Policy</a>
         </p>
       </div>
     </div>

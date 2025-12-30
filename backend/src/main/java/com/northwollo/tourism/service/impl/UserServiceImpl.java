@@ -2,8 +2,12 @@ package com.northwollo.tourism.service.impl;
 
 import com.northwollo.tourism.dto.request.UserUpdateDto;
 import com.northwollo.tourism.dto.response.UserDto;
+import com.northwollo.tourism.entity.Hotel;
 import com.northwollo.tourism.entity.Role;
 import com.northwollo.tourism.entity.User;
+import com.northwollo.tourism.repository.HotelBookingRepository;
+import com.northwollo.tourism.repository.HotelRepository;
+import com.northwollo.tourism.repository.RefreshTokenRepository;
 import com.northwollo.tourism.repository.RoleRepository;
 import com.northwollo.tourism.repository.UserRepository;
 import com.northwollo.tourism.service.UserService;
@@ -25,6 +29,9 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final HotelBookingRepository hotelBookingRepository;
+    private final HotelRepository hotelRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Override
     public Page<UserDto> getAllUsers(Pageable pageable) {
@@ -113,8 +120,28 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void deleteUser(Long userId) {
-        userRepository.deleteById(userId);
+        User user = getUser(userId);
+        
+        // Check if user has any bookings
+        var bookings = hotelBookingRepository.findByUserId(userId);
+        if (!bookings.isEmpty()) {
+            throw new RuntimeException("Cannot delete user with existing bookings. Please cancel or delete the bookings first. User has " + bookings.size() + " booking(s).");
+        }
+        
+        // Remove user as owner from any hotels
+        List<Hotel> ownedHotels = hotelRepository.findByOwnerId(userId);
+        for (Hotel hotel : ownedHotels) {
+            hotel.setOwner(null);
+            hotelRepository.save(hotel);
+        }
+        
+        // Delete refresh tokens
+        refreshTokenRepository.deleteAllTokensByUserId(userId);
+        
+        // Now delete the user
+        userRepository.delete(user);
     }
 
     @Override

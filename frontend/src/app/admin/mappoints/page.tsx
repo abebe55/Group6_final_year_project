@@ -169,28 +169,40 @@ const MapPointsManagementPage = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Map Points Management</h1>
-          <p className="text-gray-600">Manage geographic points of interest</p>
+    <div className="min-h-screen bg-gray-200 admin-page">
+      <div className="container mx-auto px-4 py-8">
+      <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
+        <div className="flex justify-between items-center">
+          <div>
+            <button
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span className="font-bold">Back to Dashboard</span>
+            </button>
+            <h1 className="text-3xl font-black text-white mb-2">📍 Map Points Management</h1>
+            <p className="text-blue-200 font-semibold">Manage geographic points of interest</p>
+          </div>
+          <button
+            onClick={() => { resetForm(); setShowModal(true); }}
+            disabled={!selectedTourismId}
+            className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50 font-black shadow-lg"
+          >+ Add Map Point</button>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          disabled={!selectedTourismId}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >+ Add Map Point</button>
       </div>
 
       {/* Tourism Selector */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div className="bg-amber-100 rounded-xl shadow-xl p-6 mb-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex-1 max-w-md">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Select Tourism Place</label>
+            <label className="block text-sm font-black text-gray-900 mb-1">Select Tourism Place</label>
             <select
               value={selectedTourismId || ''}
               onChange={(e) => setSelectedTourismId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full border border-gray-300 rounded-md px-4 py-2"
+              className="w-full border-2 border-amber-300 rounded-lg px-4 py-2 font-bold bg-white shadow-sm"
             >
               <option value="">-- Select a tourism place --</option>
               {tourisms.map(tourism => (
@@ -203,60 +215,60 @@ const MapPointsManagementPage = () => {
             placeholder="Search map points..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 max-w-md border border-gray-300 rounded-md px-4 py-2"
+            className="flex-1 max-w-md border-2 border-amber-300 rounded-lg px-4 py-2 font-bold bg-white shadow-sm"
           />
         </div>
       </div>
 
       {/* Map Points Grid */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="bg-amber-100 rounded-xl shadow-xl overflow-hidden">
         {!selectedTourismId ? (
-          <div className="p-8 text-center text-gray-600">
+          <div className="p-8 text-center text-gray-800 font-bold bg-white">
             <span className="text-4xl mb-4 block">📍</span>
-            <p>Please select a tourism place to view its map points</p>
+            <p className="font-black">Please select a tourism place to view its map points</p>
           </div>
         ) : loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading map points...</p>
+          <div className="p-8 text-center bg-white">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto"></div>
+            <p className="mt-4 text-gray-800 font-bold">Loading map points...</p>
           </div>
         ) : error ? (
-          <div className="p-8 text-center text-red-600">
+          <div className="p-8 text-center text-red-700 font-bold bg-white">
             <p>Error: {error}</p>
-            <button onClick={() => selectedTourismId && loadMapPoints(selectedTourismId)} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md">Retry</button>
+            <button onClick={() => selectedTourismId && loadMapPoints(selectedTourismId)} className="mt-4 bg-amber-200 text-amber-800 px-4 py-2 rounded-lg font-black shadow-md">Retry</button>
           </div>
         ) : filteredMapPoints.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">
+          <div className="p-8 text-center text-gray-800 bg-white">
             <span className="text-4xl mb-4 block">📍</span>
-            <p>No map points found for {getSelectedTourismName()}</p>
-            <button onClick={() => { resetForm(); setShowModal(true); }} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md">Add First Map Point</button>
+            <p className="font-black">No map points found for {getSelectedTourismName()}</p>
+            <button onClick={() => { resetForm(); setShowModal(true); }} className="mt-4 bg-amber-200 text-amber-800 px-4 py-2 rounded-lg font-black shadow-md">Add First Map Point</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
             {filteredMapPoints.map((mp) => (
-              <div key={mp.id} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
+              <div key={mp.id} className="rounded-xl p-4 hover:shadow-xl transition-shadow bg-white shadow-lg">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center">
                     <span className="text-2xl mr-3">{getTypeIcon(mp.type)}</span>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">{mp.name}</h3>
+                      <h3 className="text-lg font-black text-gray-900">{mp.name}</h3>
                       <div className="flex gap-2 mt-1">
-                        <span className={`inline-block px-2 py-1 text-xs rounded-full ${getTypeBadgeColor(mp.type)}`}>{mp.type}</span>
-                        <span className={`inline-block px-2 py-1 text-xs rounded-full ${mp.active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full font-black shadow-sm ${getTypeBadgeColor(mp.type)}`}>{mp.type}</span>
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full font-black shadow-sm ${mp.active !== false ? 'bg-green-200 text-green-900' : 'bg-red-200 text-red-900'}`}>
                           {mp.active !== false ? '✓ Active' : '✗ Inactive'}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
-                {mp.description && <p className="text-sm text-gray-600 mt-3 line-clamp-2">{mp.description}</p>}
-                <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                {mp.description && <p className="text-sm text-gray-800 font-bold mt-3 line-clamp-2">{mp.description}</p>}
+                <div className="mt-3 p-2 bg-amber-50 rounded-lg text-xs text-gray-800 font-bold shadow-inner">
                   <div>📍 Lat: {mp.latitude.toFixed(6)}</div>
                   <div>📍 Lng: {mp.longitude.toFixed(6)}</div>
                 </div>
                 <div className="mt-4 flex justify-end space-x-2">
-                  <button onClick={() => openEditModal(mp)} className="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-                  <button onClick={() => handleDelete(mp.id)} disabled={actionLoading === mp.id} className="text-red-600 hover:text-red-800 text-sm disabled:opacity-50">Delete</button>
+                  <button onClick={() => openEditModal(mp)} className="bg-blue-200 text-blue-800 px-3 py-1 rounded-lg text-sm font-black hover:bg-blue-300 shadow-md">Edit</button>
+                  <button onClick={() => handleDelete(mp.id)} disabled={actionLoading === mp.id} className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-black hover:bg-red-300 shadow-md disabled:opacity-50">Delete</button>
                 </div>
               </div>
             ))}
@@ -267,53 +279,56 @@ const MapPointsManagementPage = () => {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">{editingMapPoint ? 'Edit Map Point' : 'Add New Map Point'}</h3>
-            <p className="text-sm text-gray-500 mb-4">Tourism Place: {getSelectedTourismName()}</p>
-            <div className="space-y-4">
+          <div className="bg-white rounded-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto border-2 border-gray-300 shadow-2xl">
+            <div className="sticky top-0 bg-gray-100 border-b-2 border-gray-300 px-6 py-4">
+              <h3 className="text-lg font-black">{editingMapPoint ? '✏️ Edit Map Point' : '➕ Add New Map Point'}</h3>
+              <p className="text-sm text-gray-600 font-bold mt-1">Tourism Place: {getSelectedTourismName()}</p>
+            </div>
+            <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2" required />
+                <label className="block text-sm font-black text-gray-800 mb-1">Name *</label>
+                <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full border-2 border-gray-400 rounded-lg px-3 py-2 font-semibold" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
-                <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2" required>
+                <label className="block text-sm font-black text-gray-800 mb-1">Type *</label>
+                <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full border-2 border-gray-400 rounded-lg px-3 py-2 font-bold" required>
                   <option value="">Select type</option>
                   {POINT_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Latitude *</label>
-                  <input type="number" step="any" value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-300 rounded-md px-3 py-2" required />
+                  <label className="block text-sm font-black text-gray-800 mb-1">Latitude *</label>
+                  <input type="number" step="any" value={formData.latitude} onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })} className="w-full border-2 border-gray-400 rounded-lg px-3 py-2 font-semibold" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Longitude *</label>
-                  <input type="number" step="any" value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })} className="w-full border border-gray-300 rounded-md px-3 py-2" required />
+                  <label className="block text-sm font-black text-gray-800 mb-1">Longitude *</label>
+                  <input type="number" step="any" value={formData.longitude} onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })} className="w-full border-2 border-gray-400 rounded-lg px-3 py-2 font-semibold" required />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2" rows={3} />
+                <label className="block text-sm font-black text-gray-800 mb-1">Description</label>
+                <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full border-2 border-gray-400 rounded-lg px-3 py-2 font-semibold" rows={3} />
               </div>
-              <div className="flex items-center">
+              <div className="flex items-center border-2 border-gray-300 rounded-lg p-3 bg-gray-50">
                 <input 
                   type="checkbox" 
                   id="active" 
                   checked={formData.active !== false}
                   onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-400 rounded" 
                 />
-                <label htmlFor="active" className="ml-2 block text-sm text-gray-900">Active (visible on map)</label>
+                <label htmlFor="active" className="ml-2 block text-sm text-gray-900 font-bold">Active (visible on map)</label>
               </div>
             </div>
-            <div className="mt-6 flex justify-end space-x-3">
-              <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-              <button onClick={editingMapPoint ? handleUpdate : handleCreate} disabled={actionLoading !== null || !formData.name || !formData.type} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">{editingMapPoint ? 'Update' : 'Create'}</button>
+            <div className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex justify-end space-x-3">
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="px-4 py-2 text-gray-700 hover:text-gray-900 font-bold border-2 border-gray-400 rounded-lg">Cancel</button>
+              <button onClick={editingMapPoint ? handleUpdate : handleCreate} disabled={actionLoading !== null || !formData.name || !formData.type} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 disabled:opacity-50 font-black border-2 border-blue-300">{editingMapPoint ? 'Update' : 'Create'}</button>
             </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

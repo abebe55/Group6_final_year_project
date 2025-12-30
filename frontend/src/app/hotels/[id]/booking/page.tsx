@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -8,6 +8,7 @@ import TopBar from "@/components/layout/TopBar";
 import { getHotelDetails } from "@/services/hotel.service";
 import { BookingService, Booking, BOOKING_STATUS } from "@/services/booking.service";
 import { HotelDetailInfoDto } from "@/types/hotel";
+import { API_BASE_URL } from "@/services/api";
 
 export default function HotelOwnerBookingPage() {
   const params = useParams();
@@ -34,6 +35,26 @@ export default function HotelOwnerBookingPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
 
+  const loadBookings = useCallback(async (showLoading = false) => {
+    if (!token || !userId) return;
+    try {
+      if (showLoading) setBookingsLoading(true);
+      const data = await BookingService.getHotelBookings(token, hotelId, userId);
+      setBookings(data);
+      // Update selected booking with fresh data (to get new messages)
+      if (selectedBooking) {
+        const updated = data.find(b => b.bookingId === selectedBooking.bookingId);
+        if (updated) setSelectedBooking(updated);
+      } else if (data.length > 0) {
+        setSelectedBooking(data[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load bookings:", err);
+    } finally {
+      if (showLoading) setBookingsLoading(false);
+    }
+  }, [token, userId, hotelId, selectedBooking?.bookingId]);
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.push("/auth/login");
@@ -46,7 +67,12 @@ export default function HotelOwnerBookingPage() {
     if (hotel && isAuthenticated && token && userId) {
       // Check if user is the owner of this hotel or admin
       if (role === "ADMIN" || (hotel.ownerId && hotel.ownerId === userId)) {
-        loadBookings();
+        // Initial load with loading indicator
+        loadBookings(true);
+        
+        // Auto-refresh every 10 seconds to get new messages from clients
+        const interval = setInterval(() => loadBookings(false), 10000);
+        return () => clearInterval(interval);
       } else {
         // Not the owner, redirect to hotel detail page
         router.push(`/hotels/${hotelId}`);
@@ -63,22 +89,6 @@ export default function HotelOwnerBookingPage() {
       setError(err?.message || "Failed to load hotel");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadBookings = async () => {
-    if (!token || !userId) return;
-    try {
-      setBookingsLoading(true);
-      const data = await BookingService.getHotelBookings(token, hotelId, userId);
-      setBookings(data);
-      if (data.length > 0 && !selectedBooking) {
-        setSelectedBooking(data[0]);
-      }
-    } catch (err) {
-      console.error("Failed to load bookings:", err);
-    } finally {
-      setBookingsLoading(false);
     }
   };
 
@@ -431,7 +441,13 @@ export default function HotelOwnerBookingPage() {
                     <div className="p-6 border-b">
                       <h3 className="font-semibold text-gray-700 mb-3">🧾 Payment Receipt</h3>
                       <div className="bg-gray-100 p-4 rounded-lg">
-                        <img src={selectedBooking.receiptImageUrl} alt="Receipt" className="max-w-md rounded-lg border shadow" />
+                        <img 
+                          src={selectedBooking.receiptImageUrl.startsWith('/uploads') 
+                            ? `${API_BASE_URL.replace('/api', '')}${selectedBooking.receiptImageUrl}` 
+                            : selectedBooking.receiptImageUrl} 
+                          alt="Receipt" 
+                          className="max-w-md rounded-lg border shadow" 
+                        />
                       </div>
                     </div>
                   )}

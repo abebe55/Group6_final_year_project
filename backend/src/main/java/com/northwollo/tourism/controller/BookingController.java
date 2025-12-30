@@ -5,9 +5,11 @@ import com.northwollo.tourism.dto.response.HotelBookingResponseDto;
 import com.northwollo.tourism.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -47,6 +49,14 @@ public class BookingController {
             @RequestParam String receiptUrl,
             @RequestParam Long userId) {
         return ResponseEntity.ok(bookingService.uploadReceipt(id, receiptUrl, userId));
+    }
+
+    @PostMapping(value = "/{id}/receipt/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<HotelBookingResponseDto> uploadReceiptFile(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam Long userId) {
+        return ResponseEntity.ok(bookingService.uploadReceiptFile(id, file, userId));
     }
 
     @PostMapping("/{id}/problem")

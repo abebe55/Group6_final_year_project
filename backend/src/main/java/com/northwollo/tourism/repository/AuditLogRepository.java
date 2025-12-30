@@ -4,6 +4,7 @@ import com.northwollo.tourism.entity.AuditLogEntry;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface AuditLogRepository extends JpaRepository<AuditLogEntry, Long> {
+public interface AuditLogRepository extends JpaRepository<AuditLogEntry, Long>, JpaSpecificationExecutor<AuditLogEntry> {
 
     /**
      * Find audit logs by user ID
@@ -59,31 +60,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntry, Long> {
      */
     Page<AuditLogEntry> findByTimestampBetweenOrderByTimestampDesc(LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
 
-    /**
-     * Find audit logs by multiple criteria
-     */
-    @Query("SELECT ale FROM AuditLogEntry ale WHERE " +
-           "(:userId IS NULL OR ale.userId = :userId) AND " +
-           "(:username IS NULL OR ale.username = :username) AND " +
-           "(:action IS NULL OR ale.action = :action) AND " +
-           "(:resourceType IS NULL OR ale.resourceType = :resourceType) AND " +
-           "(:category IS NULL OR ale.category = :category) AND " +
-           "(:severity IS NULL OR ale.severity = :severity) AND " +
-           "(:ipAddress IS NULL OR ale.ipAddress = :ipAddress) AND " +
-           "(:startTime IS NULL OR ale.timestamp >= :startTime) AND " +
-           "(:endTime IS NULL OR ale.timestamp <= :endTime) " +
-           "ORDER BY ale.timestamp DESC")
-    Page<AuditLogEntry> findByMultipleCriteria(
-            @Param("userId") Long userId,
-            @Param("username") String username,
-            @Param("action") String action,
-            @Param("resourceType") String resourceType,
-            @Param("category") String category,
-            @Param("severity") String severity,
-            @Param("ipAddress") String ipAddress,
-            @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime,
-            Pageable pageable);
+    // Note: findByMultipleCriteria removed - use JpaSpecificationExecutor.findAll(Specification, Pageable) instead
+    // This avoids PostgreSQL parameter type inference issues with nullable parameters
 
     /**
      * Count audit logs by user within a time period
