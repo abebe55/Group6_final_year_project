@@ -720,9 +720,9 @@ north-wollo-tourism/
 | Name | ID | GitHub |
 |------|------|--------|
 | [Abebe Marye] | [1306166] |  [@abebe55](https://github.com/@abebe55) |
-| [Alemeu Mola] | [] | [](https://github.com/username2) |
-| [Debala ] | [] | [@dabala390-cmd](https://github.com/@dabala390-cmd) |
-| [Ashenafi ] | [] | [@ashe0123](https://github.com/@ashe0123) |
+| [Alemeu Mola] | [1300403] | [](https://github.com/username2) |
+| [Debala ] | [1300763] | [@dabala390-cmd](https://github.com/@dabala390-cmd) |
+| [Ashenafi ] | [1306811] | [@ashe0123](https://github.com/@ashe0123) |
 | [Mohammed ] | [] | [@wassie49](https://github.com/@wassie49) |
 
 ---
