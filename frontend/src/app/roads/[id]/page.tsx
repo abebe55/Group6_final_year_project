@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { RoadInfoDto } from "@/types/road";
 import { HorseServiceSummaryDto } from "@/types/horse";
+import { TourismFullDetailDto } from "@/types/tourism";
 import { getRoadsByTourism } from "@/services/road.service";
 import { getHorseServicesByRoad } from "@/services/horse.service";
+import { fetchTourismDetail } from "@/services/tourism.service";
 import TopBar from "@/components/layout/TopBar";
 import dynamic from "next/dynamic";
 
@@ -15,13 +17,14 @@ const RoadMapModal = dynamic(() => import("@/components/map/RoadMapModal"), {
   ssr: false,
 });
 
-export default function RoadsPage() {
+function RoadDetailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
   const tourismId = Number(searchParams.get("tourismId"));
   const tourismName = searchParams.get("tourismName") || "destination";
   
+  const [tourismDetail, setTourismDetail] = useState<TourismFullDetailDto | null>(null);
   const [roads, setRoads] = useState<RoadInfoDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +43,7 @@ export default function RoadsPage() {
   };
 
   useEffect(() => {
-    async function loadRoads() {
+    async function loadData() {
       if (!tourismId) {
         setError("No tourism destination selected");
         setLoading(false);
@@ -49,17 +52,22 @@ export default function RoadsPage() {
 
       try {
         setLoading(true);
-        const data = await getRoadsByTourism(tourismId);
-        setRoads(data);
+        // Fetch tourism details
+        const tourismData = await fetchTourismDetail(tourismId);
+        setTourismDetail(tourismData);
+        
+        // Fetch roads
+        const roadsData = await getRoadsByTourism(tourismId);
+        setRoads(roadsData);
       } catch (err: any) {
         setError(err.message || "Failed to load road information");
-        console.error("Roads load error:", err);
+        console.error("Data load error:", err);
       } finally {
         setLoading(false);
       }
     }
 
-    loadRoads();
+    loadData();
   }, [tourismId]);
 
   // Function to toggle and load horse services for a road
@@ -168,7 +176,7 @@ export default function RoadsPage() {
           
           <div className="space-y-6">
             <div className="inline-block">
-              <h1 className="text-5xl md:text-7xl lg:text-8xl font-black bg-gradient-to-r from-gray-900 via-emerald-800 to-blue-900 bg-clip-text text-transparent mb-6 leading-none">
+              <h1 className="text-3xl md:text-5xl lg:text-7xl font-black bg-gradient-to-r from-gray-900 via-emerald-800 to-blue-900 bg-clip-text text-transparent mb-6 leading-none">
                 🛤️ Routes
               </h1>
             </div>
@@ -452,18 +460,20 @@ export default function RoadsPage() {
       `}</style>
 
       {/* Road Map Modal */}
-      {selectedRoad && (
+      {selectedRoad && tourismDetail && (
         <RoadMapModal
+          key={`${tourismId}-${selectedRoad.id}`}
           isOpen={mapModalOpen}
           onClose={() => {
             setMapModalOpen(false);
             setSelectedRoad(null);
           }}
-          roadId={selectedRoad.id}
-          tourismId={tourismId}
-          roadType={selectedRoad.roadType}
-          initialPlace={selectedRoad.initialPlace}
-          destinationName={tourismName}
+          road={selectedRoad}
+          tourismName={tourismDetail.name}
+          tourismWereda={tourismDetail.wereda}
+          tourismKebele={tourismDetail.kebele}
+          tourismLatitude={tourismDetail.latitude}
+          tourismLongitude={tourismDetail.longitude}
         />
       )}
     </div>
@@ -471,6 +481,14 @@ export default function RoadsPage() {
 }
 
 // Interactive Distance Card Component
+export default function RoadDetailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div></div>}>
+      <RoadDetailContent />
+    </Suspense>
+  );
+}
+
 function DistanceCard({ icon, label, distance, color }: { 
   icon: string; 
   label: string; 
