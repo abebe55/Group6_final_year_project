@@ -1,107 +1,204 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/useAuthStore";
-import TopBar from "@/components/layout/TopBar";
 import { BookingService, Booking, BOOKING_STATUS } from "@/services/booking.service";
-import { API_BASE_URL } from "@/services/api";
+import { useToast } from "@/components/common/Toast";
+import { useConfirm } from "@/components/common/ConfirmDialog";
+import AvatarDropdown from "@/components/common/AvatarDropdown";
+import { useBookingWS } from "@/hooks/useBookingWS";
+import { useTranslation } from "react-i18next";
 
 export default function ClientBookingsPage() {
   const router = useRouter();
-  const { isAuthenticated, token, userId, username } = useAuthStore();
+  const { isAuthenticated, token, userId, isHydrated } = useAuthStore();
+  const toast = useToast();
+  const confirm = useConfirm();
+  const { t } = useTranslation();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showDetailOnly, setShowDetailOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("ALL");
   const [actionLoading, setActionLoading] = useState(false);
-
-  // Form states
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState("");
-  const [problemReport, setProblemReport] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [zoomedReceipt, setZoomedReceipt] = useState<string | null>(null);
   const [showProblemModal, setShowProblemModal] = useState(false);
+  const [problemReport, setProblemReport] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Real-time state
+  const [ownerTyping, setOwnerTyping] = useState<{ bookingId: number; name: string } | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<Map<number, string>>(new Map());
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedBookingRef = useRef<Booking | null>(null);
+
+  // Keep ref in sync via effect, not during render
+  useEffect(() => {
+    selectedBookingRef.current = selectedBooking;
+  });
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/auth/login");
-      return;
-    }
-    loadBookings();
-  }, [isAuthenticated]);
+    if (!isHydrated) return;
+    if (!isAuthenticated) { router.push("/auth/login"); return; }
+    loadBookings(true);
+    // Fallback polling every 60s (WebSocket handles real-time)
+    const interval = setInterval(() => loadBookings(false), 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, isHydrated]);
 
-  const loadBookings = async () => {
+  // WebSocket: real-time booking updates, messages, typing, online status
+  const { sendTyping } = useBookingWS(isAuthenticated ? token : null, (event, data) => {
+    const booking = (data as { booking?: Booking }).booking;
+    const message = (data as { message?: string }).message || '';
+
+    if (event === 'booking_update') {
+      if (!booking) return;
+      setBookings(prev => {
+        const exists = prev.some(b => b.bookingId === booking.bookingId);
+        if (!exists) return prev;
+        return prev.map(b => b.bookingId === booking.bookingId ? booking : b);
+      });
+      setSelectedBooking(prev =>
+        prev?.bookingId === booking.bookingId ? booking : prev
+      );
+      if (message) toast.info(`🔔 ${message}`);
+    }
+
+    if (event === 'booking_message') {
+      if (!booking) return;
+      setBookings(prev => prev.map(b => b.bookingId === booking.bookingId ? booking : b));
+      setSelectedBooking(prev =>
+        prev?.bookingId === booking.bookingId ? booking : prev
+      );
+      const senderName = (data as { senderName?: string }).senderName || 'Owner';
+      const msg = (data as { message?: string }).message || '';
+      toast.info(`💬 ${senderName}: "${msg.substring(0, 40)}${msg.length > 40 ? '...' : ''}"`);
+    }
+
+    if (event === 'typing') {
+      const bookingId = data.bookingId as number;
+      const name = data.name as string;
+      const isTyping = data.isTyping as boolean;
+      // Only show typing for the currently selected booking
+      if (isTyping) {
+        setOwnerTyping({ bookingId, name });
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => setOwnerTyping(null), 4000);
+      } else {
+        if (selectedBookingRef.current?.bookingId === bookingId) {
+          setOwnerTyping(null);
+        }
+      }
+    }
+
+    if (event === 'online') {
+      const onlineUserId = Number(data.userId);
+      const name = data.name as string;
+      const online = data.online as boolean;
+      setOnlineUsers(prev => {
+        const next = new Map(prev);
+        if (online) next.set(onlineUserId, name);
+        else next.delete(onlineUserId);
+        return next;
+      });
+    }
+  });
+
+  // Send typing signal when user types in message box
+  const handleMessageChange = useCallback((value: string) => {
+    setNewMessage(value);
+    if (selectedBooking) {
+      sendTyping(selectedBooking.bookingId, value.length > 0);
+    }
+  }, [selectedBooking, sendTyping]);
+
+  // Stop typing when message is sent
+  const stopTyping = useCallback(() => {
+    if (selectedBooking) sendTyping(selectedBooking.bookingId, false);
+  }, [selectedBooking, sendTyping]);
+
+  const filterCounts: Record<string, number> = {
+    ALL: bookings.length,
+    REQUESTED: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.REQUESTED).length,
+    OWNER_ACCEPTED: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.OWNER_ACCEPTED).length,
+    COST_PROPOSED: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.COST_PROPOSED).length,
+    PAID: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.PAID).length,
+    APPROVED: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.APPROVED).length,
+    REJECTED: bookings.filter(b => b.bookingStatus === BOOKING_STATUS.REJECTED).length,
+  };
+
+  const applyFilter = (f: string, data: Booking[]) =>
+    data.filter(b => f === "ALL" ? true : b.bookingStatus === f);
+
+  const filteredBookings = applyFilter(filter, bookings);
+
+  const handleFilterChange = (f: string) => {
+    setFilter(f);
+    setSelectedBooking(applyFilter(f, bookings)[0] ?? null);
+  };
+
+  const loadBookings = async (showLoading = false) => {
     if (!token || !userId) return;
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
       const data = await BookingService.getMyBookings(token, userId);
       setBookings(data);
-      if (data.length > 0 && !selectedBooking) {
-        setSelectedBooking(data[0]);
-      }
+      setSelectedBooking(prev => {
+        if (prev) return data.find(b => b.bookingId === prev.bookingId) ?? data[0] ?? null;
+        return data[0] ?? null;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bookings");
-    } finally {
-      setLoading(false);
-    }
+    } finally { if (showLoading) setLoading(false); }
   };
 
-  const handleUploadReceipt = async () => {
-    if (!token || !userId || !selectedBooking || !receiptFile) return;
-    try {
-      setActionLoading(true);
-      const updated = await BookingService.uploadReceiptFile(token, selectedBooking.bookingId, receiptFile, userId);
-      updateBookingInList(updated);
-      setSelectedBooking(updated);
-      setReceiptFile(null);
-      setReceiptPreview(null);
-      setShowReceiptModal(false);
-      alert("Receipt uploaded successfully! The hotel owner will review it.");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to upload receipt");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
-      if (!allowedTypes.includes(file.type)) {
-        alert('Please select an image file (JPG, PNG, GIF, WebP) or PDF');
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-      setReceiptFile(file);
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => setReceiptPreview(reader.result as string);
-        reader.readAsDataURL(file);
-      } else {
-        setReceiptPreview(null);
-      }
-    }
+  const updateBookingInList = (updated: Booking) => {
+    setBookings(prev => prev.map(b => b.bookingId === updated.bookingId ? updated : b));
   };
 
   const handleSendMessage = async () => {
     if (!token || !userId || !selectedBooking || !newMessage.trim()) return;
+    stopTyping(); // stop typing indicator before sending
     try {
       const updated = await BookingService.sendMessage(token, selectedBooking.bookingId, newMessage, userId);
-      updateBookingInList(updated);
-      setSelectedBooking(updated);
-      setNewMessage("");
+      updateBookingInList(updated); setSelectedBooking(updated); setNewMessage("");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to send"); }
+  };
+
+  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    if (!allowed.includes(file.type)) { toast.warning("Please select an image or PDF file"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.warning("File must be under 10MB"); return; }
+    setReceiptFile(file);
+  };
+
+  const handleUploadReceipt = async () => {
+    if (!token || !userId || !selectedBooking || !receiptFile) return;
+    const optimisticBooking = { ...selectedBooking, bookingStatus: 'PAID' as any };
+    updateBookingInList(optimisticBooking);
+    setSelectedBooking(optimisticBooking);
+    setReceiptFile(null); setShowReceiptModal(false);
+    try {
+      setActionLoading(true);
+      const updated = await BookingService.uploadReceiptFile(token, selectedBooking.bookingId, receiptFile, userId);
+      updateBookingInList(updated); setSelectedBooking(updated);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to send message");
-    }
+      const msg = err instanceof Error ? err.message : "Failed to upload";
+      await loadBookings(false);
+      if (msg !== 'TIMEOUT_RELOAD') toast.error(msg);
+    } finally { setActionLoading(false); }
   };
 
   const handleReportProblem = async () => {
@@ -109,471 +206,484 @@ export default function ClientBookingsPage() {
     try {
       setActionLoading(true);
       const updated = await BookingService.reportProblem(token, selectedBooking.bookingId, problemReport, userId);
-      updateBookingInList(updated);
-      setSelectedBooking(updated);
-      setProblemReport("");
-      setShowProblemModal(false);
-      alert("Problem reported to admin. They will contact you soon.");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to report problem");
-    } finally {
-      setActionLoading(false);
+      updateBookingInList(updated); setSelectedBooking(updated);
+      setProblemReport(""); setShowProblemModal(false);
+      toast.success("Problem reported. Admin will contact you soon.");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to report"); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleHideBooking = async (bookingId: number) => {
+    if (!token || !userId) return;
+    
+    // Show custom confirmation dialog
+    const confirmed = await confirm({
+      title: "Delete Booking",
+      message: "If you delete this booking, you will not be able to view it again in your bookings list. The booking will still be visible to the hotel owner and admin for record-keeping purposes. Are you sure you want to remove this booking from your list?",
+      variant: "warning",
+      confirmLabel: "Yes, Delete",
+      cancelLabel: "Cancel"
+    });
+    
+    if (!confirmed) return;
+    
+    try {
+      await BookingService.hideBooking(token, bookingId, userId);
+      setBookings(prev => prev.filter(b => b.bookingId !== bookingId));
+      if (selectedBooking?.bookingId === bookingId) {
+        setSelectedBooking(bookings.filter(b => b.bookingId !== bookingId)[0] ?? null);
+        setShowDetailOnly(false);
+      }
+      toast.success("Booking removed from your list");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed to remove"); }
+  };
+
+  const getReceiptUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http')) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.pathname.startsWith('/uploads/')) {
+          return `/api/image-proxy?path=${encodeURIComponent(parsed.pathname)}`;
+        }
+      } catch { /* not a valid URL */ }
+      return url;
+    }
+    const path = url.startsWith('/') ? url : `/${url}`;
+    if (path.startsWith('/uploads/')) {
+      return `/api/image-proxy?path=${encodeURIComponent(path)}`;
+    }
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'https://tourismsystem.onrender.com';
+    return `${backendUrl}/${url.replace(/^\//, '')}`;
+  };
+
+  const handleDownloadReceipt = async () => {
+    if (!selectedBooking?.receiptImageUrl) return;
+    try {
+      const url = getReceiptUrl(selectedBooking.receiptImageUrl);
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const extension = selectedBooking.receiptImageUrl.split('.').pop() || 'jpg';
+      link.download = `receipt-booking-${selectedBooking.bookingId}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(getReceiptUrl(selectedBooking.receiptImageUrl), '_blank');
     }
   };
 
-  const updateBookingInList = (updated: Booking) => {
-    setBookings(prev => prev.map(b => b.bookingId === updated.bookingId ? updated : b));
-  };
-
-  const filteredBookings = bookings.filter(b => {
-    if (filter === "ALL") return true;
-    if (filter === "ACTIVE") return [BOOKING_STATUS.REQUESTED, BOOKING_STATUS.OWNER_ACCEPTED, BOOKING_STATUS.COST_PROPOSED, BOOKING_STATUS.PAID].includes(b.bookingStatus);
-    if (filter === "APPROVED") return b.bookingStatus === BOOKING_STATUS.APPROVED;
-    if (filter === "COMPLETED") return [BOOKING_STATUS.APPROVED, BOOKING_STATUS.REJECTED].includes(b.bookingStatus);
-    return b.bookingStatus === filter;
-  });
-
-  // Stats
-  const activeCount = bookings.filter(b => [BOOKING_STATUS.REQUESTED, BOOKING_STATUS.OWNER_ACCEPTED, BOOKING_STATUS.COST_PROPOSED, BOOKING_STATUS.PAID].includes(b.bookingStatus)).length;
-  const approvedCount = bookings.filter(b => b.bookingStatus === BOOKING_STATUS.APPROVED).length;
-  const needsPayment = bookings.filter(b => b.bookingStatus === BOOKING_STATUS.COST_PROPOSED).length;
-
-  if (!isAuthenticated) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-100">Redirecting...</div>;
-  }
+  if (!mounted) return null;
+  if (!isAuthenticated) return <div className="min-h-screen flex items-center justify-center">Redirecting...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <TopBar />
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <button
-              onClick={() => router.push('/')}
-              className="flex items-center gap-2 text-gray-700 hover:text-gray-900 mb-3 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              <span className="font-bold">Back to Home</span>
-            </button>
-            <h1 className="text-3xl font-black text-gray-900">📋 My Bookings</h1>
-            <p className="text-gray-700 mt-1 font-semibold">Track and manage your hotel reservations</p>
-          </div>
-          <button onClick={loadBookings} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold border-2 border-blue-700">
-            🔄 Refresh
-          </button>
-        </div>
+    <div className="min-h-screen bg-white">
 
-        {error && (
-          <div className="bg-red-100 border-2 border-red-400 text-red-700 p-4 rounded-lg mb-6 font-bold">
-            {error}
-          </div>
-        )}
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-200 rounded-xl p-5 shadow-xl hover:shadow-2xl transition-shadow">
-            <div className="text-3xl font-black text-gray-900">{bookings.length}</div>
-            <div className="text-gray-800 text-sm font-extrabold uppercase tracking-wide">Total Bookings</div>
-          </div>
-          <div className="bg-blue-200 rounded-xl p-5 shadow-xl hover:shadow-2xl transition-shadow">
-            <div className="text-3xl font-black text-blue-700">{activeCount}</div>
-            <div className="text-gray-800 text-sm font-extrabold uppercase tracking-wide">In Progress</div>
-          </div>
-          <div className="bg-purple-200 rounded-xl p-5 shadow-xl hover:shadow-2xl transition-shadow">
-            <div className="text-3xl font-black text-purple-700">{needsPayment}</div>
-            <div className="text-gray-800 text-sm font-extrabold uppercase tracking-wide">Awaiting Payment</div>
-          </div>
-          <div className="bg-green-200 rounded-xl p-5 shadow-xl hover:shadow-2xl transition-shadow">
-            <div className="text-3xl font-black text-green-700">{approvedCount}</div>
-            <div className="text-gray-800 text-sm font-extrabold uppercase tracking-wide">Approved</div>
-          </div>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {["ALL", "ACTIVE", "APPROVED", "COMPLETED"].map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg font-bold transition border-2 ${
-                filter === f ? "bg-blue-600 text-white border-blue-700" : "bg-white text-gray-700 hover:bg-gray-100 border-gray-400"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        ) : bookings.length === 0 ? (
-          <div className="bg-white rounded-xl p-12 text-center border-2 border-gray-300 shadow-lg">
-            <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-xl font-black text-gray-900 mb-2">No Bookings Yet</h3>
-            <p className="text-gray-700 mb-6 font-semibold">Start exploring hotels and make your first reservation!</p>
-            <button
-              onClick={() => router.push('/tourisms')}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-black hover:bg-blue-700 border-2 border-blue-700"
-            >
-              🏨 Browse Hotels
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Bookings List */}
-            <div className="lg:col-span-1 space-y-3 max-h-[70vh] overflow-y-auto">
-              <h2 className="font-black text-gray-800 sticky top-0 bg-gray-100 py-2">
-                Bookings ({filteredBookings.length})
-              </h2>
-              {filteredBookings.map(b => (
-                <div
-                  key={b.bookingId}
-                  onClick={() => setSelectedBooking(b)}
-                  className={`bg-gray-50 rounded-xl p-4 cursor-pointer transition-all hover:shadow-xl hover:scale-[1.02] shadow-lg ${
-                    selectedBooking?.bookingId === b.bookingId ? "bg-blue-100 shadow-xl ring-4 ring-blue-300" : ""
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <span className="font-black text-lg text-gray-900">#{b.bookingId}</span>
-                      {b.problemReported && <span className="ml-2 text-red-500">⚠️</span>}
-                    </div>
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-black ${BookingService.getStatusColor(b.bookingStatus)}`}>
-                      {BookingService.getStatusLabel(b.bookingStatus)}
-                    </span>
-                  </div>
-                  <div className="text-sm space-y-1">
-                    <div className="font-black text-gray-900 text-base">🏨 {b.hotel.name}</div>
-                    <div className="font-bold text-gray-700">📅 {b.checkIn} → {b.checkOut}</div>
-                    <div className="font-bold text-gray-700">👥 {b.numberOfGuests} guests {b.numberOfRooms && `• ${b.numberOfRooms} rooms`}</div>
-                    {b.totalCost && <div className="text-green-700 font-black text-base">💰 {b.totalCost} ETB</div>}
-                  </div>
-                </div>
-              ))}
+      {/* Sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 flex">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setSidebarOpen(false)} />
+          <div className="relative w-64 z-50 shadow-2xl bg-white flex flex-col">
+            <div className="px-4 py-4 bg-white border-b border-gray-200">
+              <button onClick={() => { router.back(); setSidebarOpen(false); }}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-xs font-bold mb-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Go Back
+              </button>
+              <p className="text-gray-900 font-bold text-sm">{t("booking.myBookings")}</p>
+              <p className="text-gray-500 text-xs">{t("booking.trackReservations")}</p>
             </div>
+            <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+              <button onClick={() => { loadBookings(true); setSidebarOpen(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+              <div className="border-t border-gray-100 pt-2 mt-1">
+                <p className="text-xs text-gray-400 px-3 pb-1 font-semibold">{t("booking.filterBookings")}</p>
+                {[
+                  { key: "ALL", label: t("booking.allBookings"), color: "#6d28d9" },
+                  { key: "REQUESTED", label: t("booking.requested"), color: "#d97706" },
+                  { key: "OWNER_ACCEPTED", label: t("booking.accepted"), color: "#0891b2" },
+                  { key: "COST_PROPOSED", label: t("booking.costProposed"), color: "#7c3aed" },
+                  { key: "PAID", label: t("booking.paid"), color: "#059669" },
+                  { key: "APPROVED", label: t("booking.approved"), color: "#16a34a" },
+                  { key: "REJECTED", label: t("booking.rejected"), color: "#dc2626" },
+                ].map(({ key, label, color }) => (
+                  <button key={key} onClick={() => { handleFilterChange(key); setSidebarOpen(false); }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold transition-all"
+                    style={filter === key
+                      ? { color, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)' }
+                      : { color: "#374151" }}>
+                    <span>{label}</span>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, minWidth: '20px', textAlign: 'center',
+                      background: filter === key ? color : '#e5e7eb',
+                      color: filter === key ? '#fff' : '#374151',
+                      borderRadius: '999px', padding: '1px 7px',
+                    }}>{filterCounts[key]}</span>
+                  </button>
+                ))}
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
 
-            {/* Booking Details */}
-            <div className="lg:col-span-2">
-              {selectedBooking ? (
-                <div className="bg-white rounded-xl shadow-2xl">
-                  {/* Header */}
-                  <div className="p-6 bg-gradient-to-r from-blue-200 to-indigo-200 rounded-t-xl">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="text-3xl font-black text-gray-900">Booking #{selectedBooking.bookingId}</h2>
-                        <p className="text-gray-800 font-extrabold text-lg">{selectedBooking.hotel.name}</p>
-                      </div>
-                      <span className={`px-5 py-2.5 rounded-full text-sm font-black shadow-lg ${BookingService.getStatusColor(selectedBooking.bookingStatus)}`}>
-                        {BookingService.getStatusLabel(selectedBooking.bookingStatus)}
-                      </span>
-                    </div>
-                  </div>
+      {/* Sticky top bar */}
+      <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm overflow-visible">
+        <div className="flex items-center h-12 px-2 overflow-visible">
+          <button onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="h-9 w-9 flex-shrink-0 flex items-center justify-center text-gray-700 rounded-lg hover:bg-gray-100 transition-all">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <button onClick={() => router.back()} className="h-8 w-8 flex-shrink-0 flex items-center justify-center text-gray-500 rounded-lg hover:bg-gray-100 transition-all ml-1">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span className="ml-2 text-gray-900 font-bold text-sm flex-shrink-0 hidden sm:block">{t("booking.myBookings")}</span>
+          {/* Spacer */}
+          <div className="flex-1 min-w-0" />
+          {/* Filter buttons — scrollable on mobile, scrollbar fully hidden */}
+          <div
+            className="flex items-center gap-0 shrink-0 max-w-[calc(100vw-165px)] sm:max-w-none"
+            style={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {[
+              { key: 'ALL', label: t("booking.all") },
+              { key: 'REQUESTED', label: t("booking.requested") },
+              { key: 'OWNER_ACCEPTED', label: t("booking.accepted") },
+              { key: 'COST_PROPOSED', label: t("booking.costProposed") },
+              { key: 'PAID', label: t("booking.paid") },
+              { key: 'APPROVED', label: t("booking.approved") },
+              { key: 'REJECTED', label: t("booking.rejected") },
+            ].map(s => (
+              <button
+                key={s.key}
+                onClick={() => handleFilterChange(s.key)}
+                className={`flex-shrink-0 px-2 text-sm font-black transition-all whitespace-nowrap ${
+                  filter === s.key ? 'text-purple-700' : 'text-gray-700 hover:text-black'
+                }`}
+              >
+                {s.label} <span className="font-bold">{filterCounts[s.key]}</span>
+              </button>
+            ))}
+          </div>
+          {/* Avatar — top right */}
+          <div className="flex-shrink-0 ml-1">
+            <AvatarDropdown />
+          </div>
+        </div>
+      </div>
 
-                  {/* Status Progress */}
-                  <div className="p-6 bg-gray-200">
-                    <h3 className="font-black text-gray-900 mb-4 text-lg">📊 Booking Progress</h3>
-                    <div className="flex items-center justify-between">
-                      {[
-                        { status: 'REQUESTED', label: 'Requested', icon: '📝' },
-                        { status: 'OWNER_ACCEPTED', label: 'Accepted', icon: '✓' },
-                        { status: 'COST_PROPOSED', label: 'Cost Sent', icon: '💰' },
-                        { status: 'PAID', label: 'Paid', icon: '🧾' },
-                        { status: 'APPROVED', label: 'Approved', icon: '✅' },
-                      ].map((step, idx) => {
-                        const statusOrder = ['REQUESTED', 'OWNER_ACCEPTED', 'COST_PROPOSED', 'PAID', 'APPROVED'];
-                        const currentIdx = statusOrder.indexOf(selectedBooking.bookingStatus);
-                        const stepIdx = statusOrder.indexOf(step.status);
-                        const isCompleted = stepIdx <= currentIdx;
-                        const isCurrent = step.status === selectedBooking.bookingStatus;
-                        
-                        return (
-                          <div key={step.status} className="flex flex-col items-center flex-1">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                              isCompleted ? 'bg-green-500 text-white' : 
-                              isCurrent ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
-                            }`}>
-                              {step.icon}
-                            </div>
-                            <span className={`text-xs mt-1 ${isCompleted || isCurrent ? 'text-gray-900 font-bold' : 'text-gray-500 font-semibold'}`}>
-                              {step.label}
-                            </span>
-                            {idx < 4 && (
-                              <div className={`h-0.5 w-full mt-5 absolute ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} style={{ display: 'none' }} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {selectedBooking.bookingStatus === BOOKING_STATUS.REJECTED && (
-                      <div className="mt-4 p-4 bg-red-200 rounded-xl text-red-800 text-sm font-black">
-                        ❌ This booking was rejected. Reason: {selectedBooking.rejectionReason || 'Not specified'}
-                      </div>
-                    )}
-                  </div>
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 py-1">
 
-                  {/* Hotel Info */}
-                  <div className="p-6 bg-white">
-                    <h3 className="font-black text-gray-900 mb-4 text-lg">🏨 Hotel Information</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="bg-gray-100 p-3 rounded-lg shadow-md"><span className="text-gray-600 font-bold">Hotel:</span> <strong className="font-black text-gray-900">{selectedBooking.hotel.name}</strong></div>
-                      <div className="bg-gray-100 p-3 rounded-lg shadow-md"><span className="text-gray-600 font-bold">Contact:</span> <strong className="font-black text-gray-900">{selectedBooking.hotel.contactInfo || 'N/A'}</strong></div>
-                      <div className="bg-gray-100 p-3 rounded-lg shadow-md"><span className="text-gray-600 font-bold">Owner:</span> <strong className="font-black text-gray-900">{selectedBooking.hotel.ownerName || 'N/A'}</strong></div>
-                      <div className="bg-gray-100 p-3 rounded-lg shadow-md"><span className="text-gray-600 font-bold">Status:</span> 
-                        <span className={`ml-2 px-3 py-1 rounded-lg text-xs font-black ${selectedBooking.hotel.active ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
-                          {selectedBooking.hotel.active ? 'Active' : 'Inactive'}
+          {error && <div className="bg-red-100 border border-red-300 text-red-700 p-2 rounded mb-2 text-xs font-bold">{error}</div>}
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+              {/* Bookings list */}
+              <div className={`lg:col-span-1 space-y-1.5 max-h-[calc(100vh-160px)] overflow-y-auto pr-1 ${showDetailOnly ? 'hidden lg:block' : ''}`}>
+                <p className="text-xs text-gray-500 font-semibold">{t("booking.myBookings")} ({filteredBookings.length})</p>
+                {filteredBookings.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400 text-xs">{t("booking.noBookings")}</div>
+                ) : filteredBookings.map(b => (
+                  <div key={b.bookingId} className={"bg-white rounded-lg p-2.5 border transition hover:shadow-sm " + (selectedBooking?.bookingId === b.bookingId ? "border-blue-300" : "border-gray-200")}>
+                    <div onClick={() => { setSelectedBooking(b); setShowDetailOnly(true); }} className="cursor-pointer">
+                      <div className="flex justify-between items-start mb-0.5">
+                        <div>
+                          <span className="font-bold text-gray-900 text-xs">{t("booking.bookingId")} {b.bookingId}</span>
+                          <span className="text-gray-400 ml-1 text-xs">{b.hotel.name}</span>
+                        </div>
+                        <span className={"text-xs " + BookingService.getStatusColor(b.bookingStatus)}>
+                          {BookingService.getStatusLabel(b.bookingStatus)}
                         </span>
                       </div>
+                      <div className="text-xs text-gray-500">{b.checkIn} → {b.checkOut} · {b.numberOfGuests} {t("booking.guests")}</div>
+                    </div>
+                    {/* Action buttons */}
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
+                      <button
+                        onClick={() => { setSelectedBooking(b); setShowDetailOnly(true); }}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-semibold transition-all"
+                      >
+                        {t("booking.seeDetail")}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleHideBooking(b.bookingId); }}
+                        className="text-xs text-red-500 hover:text-red-600 font-semibold transition-all"
+                        title="Remove from my list (booking stays in admin records)"
+                      >
+                        {t("booking.delete")}
+                      </button>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  {/* Booking Details */}
-                  <div className="p-6 bg-gray-50">
-                    <h3 className="font-black text-gray-900 mb-4 text-lg">📋 Booking Details</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-blue-200 p-4 rounded-xl text-center shadow-lg">
-                        <div className="text-gray-700 text-xs font-extrabold uppercase tracking-wide">Check-in</div>
-                        <div className="font-black text-blue-800 text-lg">{selectedBooking.checkIn}</div>
-                      </div>
-                      <div className="bg-red-200 p-4 rounded-xl text-center shadow-lg">
-                        <div className="text-gray-700 text-xs font-extrabold uppercase tracking-wide">Check-out</div>
-                        <div className="font-black text-red-800 text-lg">{selectedBooking.checkOut}</div>
-                      </div>
-                      <div className="bg-purple-200 p-4 rounded-xl text-center shadow-lg">
-                        <div className="text-gray-700 text-xs font-extrabold uppercase tracking-wide">Guests</div>
-                        <div className="font-black text-purple-800 text-2xl">{selectedBooking.numberOfGuests}</div>
-                      </div>
-                      <div className="bg-indigo-200 p-4 rounded-xl text-center shadow-lg">
-                        <div className="text-gray-700 text-xs font-extrabold uppercase tracking-wide">Rooms</div>
-                        <div className="font-black text-indigo-800 text-2xl">{selectedBooking.numberOfRooms || 1}</div>
-                      </div>
-                    </div>
-                    {selectedBooking.specialRequests && (
-                      <div className="mt-4 p-4 bg-yellow-200 rounded-xl shadow-lg">
-                        <div className="text-gray-700 text-sm font-extrabold uppercase tracking-wide">Special Requests:</div>
-                        <div className="text-gray-900 font-bold mt-1">{selectedBooking.specialRequests}</div>
+              {/* Booking detail */}
+              <div className={`lg:col-span-2 ${!showDetailOnly ? 'hidden lg:block' : ''}`}>
+                {selectedBooking ? (
+                  <div className="bg-white">
+                    {/* Back Button - Mobile only */}
+                    {showDetailOnly && (
+                      <div className="lg:hidden pb-2">
+                        <button onClick={() => setShowDetailOnly(false)}
+                          className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold text-sm">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                          {t("booking.backToList")}
+                        </button>
                       </div>
                     )}
-                  </div>
 
-                  {/* Cost & Payment Section */}
-                  {selectedBooking.totalCost && (
-                    <div className="p-6 bg-green-200">
-                      <h3 className="font-black text-green-800 mb-4 text-lg">💰 Payment Information</h3>
-                      <div className="text-center mb-4 bg-white p-4 rounded-xl shadow-xl">
-                        <div className="text-gray-700 text-sm font-extrabold uppercase tracking-wide">Total Cost</div>
-                        <div className="text-5xl font-black text-green-700">{selectedBooking.totalCost} ETB</div>
+                    {/* Header */}
+                    <div className="pb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-gray-900">Booking {selectedBooking.bookingId}</h2>
+                        <span className="text-gray-400 text-sm">·</span>
+                        <p className="text-gray-500 text-sm font-semibold">{selectedBooking.hotel.name}</p>
                       </div>
-                      
-                      {selectedBooking.bookingStatus === BOOKING_STATUS.COST_PROPOSED && (
-                        <div className="bg-white p-5 rounded-xl shadow-xl">
-                          <p className="text-green-800 mb-4 font-extrabold text-base">
-                            💳 The hotel owner has proposed a cost. Please upload your payment receipt to proceed.
-                          </p>
+                      <div className="flex items-center gap-2">
+                        <span className={"text-xs " + BookingService.getStatusColor(selectedBooking.bookingStatus)}>
+                          {BookingService.getStatusLabel(selectedBooking.bookingStatus)}
+                        </span>
+                        <button
+                          onClick={() => handleHideBooking(selectedBooking.bookingId)}
+                          className="text-gray-300 hover:text-red-400 transition-all text-xs"
+                          title="Remove from list"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Booking Info — two column grid, no borders */}
+                    <div className="pb-3">
+                      <p style={{ fontWeight: 900, fontSize: '14px', color: '#111827', marginBottom: '6px' }}>{t("booking.bookingDetails")}</p>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.hotel")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.hotel.name}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.checkIn")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.checkIn}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.phone")}: </span><span style={{ fontWeight: 700, color: '#374151' }}>{(selectedBooking as any).clientPhone || "N/A"}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.checkOut")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.checkOut}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.email")}: </span><span style={{ fontWeight: 700, color: '#374151' }}>{(selectedBooking as any).clientEmail || "N/A"}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.guests")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.numberOfGuests}</span></div>
+                        <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.rooms")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.numberOfRooms || 1}</span></div>
+                        {selectedBooking.totalCost && (
+                          <div style={{ fontSize: '13px' }}><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.proposedCost")}: </span><span style={{ fontWeight: 800, color: '#111827' }}>{selectedBooking.totalCost} ETB</span></div>
+                        )}
+                        {selectedBooking.specialRequests && (
+                          <div style={{ fontSize: '13px' }} className="col-span-2"><span style={{ color: '#6b7280', fontWeight: 700 }}>{t("booking.specialRequests")}: </span><span style={{ fontWeight: 700, color: '#374151' }}>{selectedBooking.specialRequests}</span></div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Rejection reason */}
+                    {selectedBooking.bookingStatus === BOOKING_STATUS.REJECTED && selectedBooking.rejectionReason && (
+                      <div className="py-2 mb-2">
+                        <p style={{ fontWeight: 900, fontSize: '13px', color: '#b91c1c', marginBottom: '2px' }}>{t("booking.rejectionReason")}</p>
+                        <p style={{ fontWeight: 700, fontSize: '13px', color: '#991b1b' }}>{selectedBooking.rejectionReason}</p>
+                      </div>
+                    )}
+
+                    {/* Receipt section */}
+                    {selectedBooking.receiptImageUrl && (
+                      <div className="pb-3">
+                        <p style={{ fontWeight: 900, fontSize: '14px', color: '#111827', marginBottom: '6px' }}>{t("booking.paymentReceipt")}</p>
+                        <img src={getReceiptUrl(selectedBooking.receiptImageUrl!)} alt="Receipt"
+                          className="w-full rounded-lg object-contain max-h-48 bg-gray-50 border border-gray-100 cursor-pointer"
+                          onClick={() => setZoomedReceipt(getReceiptUrl(selectedBooking.receiptImageUrl!))}
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={() => setZoomedReceipt(getReceiptUrl(selectedBooking.receiptImageUrl!))}
+                            className="px-3 py-1.5 text-base font-black text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all">
+                            {t("booking.view")}
+                          </button>
+                          <button onClick={handleDownloadReceipt}
+                            className="px-3 py-1.5 text-base font-black text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all">
+                            {t("booking.download")}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Client actions */}
+                    <div className="pb-3 flex flex-wrap gap-3 items-center">
+                      {selectedBooking.bookingStatus === BOOKING_STATUS.COST_PROPOSED && !receiptFile && (
+                        <>
+                          <input 
+                            type="file" 
+                            id="receipt-upload-input" 
+                            className="hidden" 
+                            accept="image/*,application/pdf" 
+                            onChange={handleReceiptFileChange} 
+                          />
                           <button
-                            onClick={() => setShowReceiptModal(true)}
-                            className="w-full bg-green-600 text-white py-4 rounded-xl font-black text-lg hover:bg-green-700 shadow-xl hover:shadow-2xl transition-all"
+                            type="button"
+                            onClick={() => document.getElementById('receipt-upload-input')?.click()}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors flex items-center gap-1.5"
                           >
-                            📤 Upload Payment Receipt
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>Upload Receipt</span>
+                          </button>
+                        </>
+                      )}
+                      {receiptFile && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">{receiptFile.name}</span>
+                          <button onClick={handleUploadReceipt} disabled={actionLoading}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50">
+                            {actionLoading ? t("booking.uploading") : t("booking.submit")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReceiptFile(null)}
+                            className="text-red-600 hover:text-red-800 transition-colors"
+                            title="Remove file"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                           </button>
                         </div>
                       )}
-                      
-                      {selectedBooking.bookingStatus === BOOKING_STATUS.PAID && (
-                        <div className="bg-white p-5 rounded-xl shadow-xl">
-                          <p className="text-indigo-800 font-extrabold text-base">
-                            ⏳ Your payment receipt has been uploaded. Waiting for hotel owner to verify and approve.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Receipt Image */}
-                  {selectedBooking.receiptImageUrl && (
-                    <div className="p-6 bg-white">
-                      <h3 className="font-black text-gray-900 mb-4 text-lg">🧾 Your Payment Receipt</h3>
-                      <img src={selectedBooking.receiptImageUrl} alt="Receipt" className="max-w-md rounded-xl shadow-xl" />
-                    </div>
-                  )}
-
-                  {/* Approved Status */}
-                  {selectedBooking.bookingStatus === BOOKING_STATUS.APPROVED && (
-                    <div className="p-8 bg-gradient-to-r from-green-200 to-emerald-200">
-                      <div className="text-center">
-                        <div className="text-7xl mb-4">✅</div>
-                        <h3 className="text-3xl font-black text-green-800 mb-3">Booking Approved!</h3>
-                        <p className="text-green-700 font-extrabold text-lg">
-                          Your reservation is confirmed from {selectedBooking.checkIn} to {selectedBooking.checkOut}
-                        </p>
-                        <p className="text-gray-800 mt-3 font-bold text-base">
-                          Contact the hotel at: <span className="font-black">{selectedBooking.hotel.contactInfo}</span>
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Problem Report */}
-                  {selectedBooking.problemReported && selectedBooking.problemReport && (
-                    <div className="p-6 bg-red-200">
-                      <h3 className="font-black text-red-800 mb-3 text-lg">⚠️ Problem Reported</h3>
-                      <p className="text-red-900 font-extrabold">{selectedBooking.problemReport}</p>
-                      <p className="text-sm text-red-700 mt-2 font-bold">Admin has been notified and will contact you.</p>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="p-6 bg-gray-200">
-                    <h3 className="font-black text-gray-900 mb-4 text-lg">⚡ Actions</h3>
-                    <div className="flex flex-wrap gap-4">
-                      {selectedBooking.bookingStatus === BOOKING_STATUS.COST_PROPOSED && (
-                        <button
-                          onClick={() => setShowReceiptModal(true)}
-                          className="bg-green-600 text-white px-5 py-3 rounded-xl font-black hover:bg-green-700 shadow-lg hover:shadow-xl transition-all"
-                        >
-                          📤 Upload Receipt
-                        </button>
-                      )}
-                      {!selectedBooking.problemReported && selectedBooking.bookingStatus !== BOOKING_STATUS.REJECTED && (
-                        <button
-                          onClick={() => setShowProblemModal(true)}
-                          className="bg-red-600 text-white px-5 py-3 rounded-xl font-black hover:bg-red-700 shadow-lg hover:shadow-xl transition-all"
-                        >
-                          ⚠️ Report Problem
-                        </button>
-                      )}
-                      <button
-                        onClick={() => router.push(`/hotels/${selectedBooking.hotel.id}`)}
-                        className="bg-blue-600 text-white px-5 py-3 rounded-xl font-black hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all"
-                      >
-                        🏨 View Hotel
+                      <button onClick={() => setShowProblemModal(true)}
+                        className="text-red-600 hover:text-red-800 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-transparent hover:border-red-200">
+                        {t("booking.reportProblem")}
                       </button>
+                      <button onClick={() => router.push(`/hotels/${selectedBooking.hotel.id}`)}
+                        className="text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg text-sm font-medium transition-all border border-transparent hover:border-blue-200">
+                        {t("booking.viewHotel")}
+                      </button>
+                      {selectedBooking.bookingStatus === BOOKING_STATUS.APPROVED && (
+                        <p style={{ fontWeight: 800, fontSize: '13px', color: '#15803d' }}>{t("booking.bookingApproved")}</p>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Messages */}
-                  <div className="p-8 bg-green-900 rounded-b-xl">
-                    <h3 className="font-black text-white mb-4 text-xl">💬 Conversation ({selectedBooking.messages?.length || 0})</h3>
-                    <div className="space-y-4 max-h-96 overflow-y-auto mb-6 bg-green-300 p-6 rounded-xl shadow-inner [&::-webkit-scrollbar]:w-4 [&::-webkit-scrollbar-track]:bg-gray-300 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-gray-300">
-                      {selectedBooking.messages?.length === 0 ? (
-                        <p className="text-green-950 text-center py-8 font-bold text-lg">No messages yet</p>
-                      ) : (
-                        selectedBooking.messages?.map(m => (
-                          <div
-                            key={m.id}
-                            className={`p-4 rounded-xl shadow-md ${
-                              m.senderId === userId ? "bg-green-500 ml-8" : "bg-green-100 mr-8"
-                            }`}
-                          >
-                            <div className="flex justify-between text-xs text-green-950 mb-2">
-                              <span className="font-black">{m.senderName}</span>
-                              <span className="font-bold">{new Date(m.createdAt).toLocaleString()}</span>
-                            </div>
-                            <div className="text-gray-900 font-bold">{m.message}</div>
-                            {m.messageType !== "GENERAL" && (
-                              <span className="text-xs text-green-950 mt-2 block font-black bg-green-400 px-2 py-1 rounded inline-block">[{m.messageType}]</span>
+                    {/* Messages — identical to owner page */}
+                    <div className="rounded-2xl overflow-hidden">
+                      {/* Chat Header with online status */}
+                      <div className="px-4 py-3 flex items-center justify-between bg-white border-b border-gray-100">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">M</span>
+                          <h4 className="text-gray-800 font-semibold text-sm">{t("booking.messages")} ({selectedBooking.messages?.length || 0})</h4>
+                        </div>
+                        {/* Online status indicator — dot only, no text when offline */}
+                        {selectedBooking?.hotel?.ownerId && (
+                          <div className="flex items-center gap-1.5">
+                            {onlineUsers.has(Number(selectedBooking.hotel.ownerId)) && (
+                              <>
+                                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+                                <span className="text-xs font-semibold text-green-600">{t("booking.ownerOnline")}</span>
+                              </>
                             )}
                           </div>
-                        ))
-                      )}
-                    </div>
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Type a message to the hotel owner..."
-                        className="flex-1 rounded-xl px-4 py-3 focus:ring-2 focus:ring-green-600 font-bold bg-white"
-                        onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                      />
-                      <button
-                        onClick={handleSendMessage}
-                        disabled={!newMessage.trim()}
-                        className="bg-green-700 text-white px-6 py-3 rounded-xl font-black hover:bg-green-800 disabled:opacity-50 shadow-md"
+                        )}
+                      </div>
+                      {/* Chat Body */}
+                      <div
+                        className="px-4 py-4 space-y-2 max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full"
+                        style={{ backgroundColor: '#dfe7dc' }}
                       >
-                        Send
-                      </button>
+                        {!selectedBooking.messages?.length ? (
+                          <p className="text-center py-8 text-sm text-gray-500">{t("booking.noMessages")}</p>
+                        ) : selectedBooking.messages.map(m => {
+                          const isOwn = m.senderId === userId;
+                          return (
+                            <div key={m.id} className="flex justify-start" style={{ paddingLeft: isOwn ? '16mm' : '2mm' }}>
+                              <div className="max-w-[72%] px-3 py-2 shadow-sm rounded-tl-sm rounded-tr-2xl rounded-br-2xl rounded-bl-2xl bg-white">
+                                {!isOwn && (
+                                  <p className="text-xs font-semibold mb-0.5 text-purple-600">{m.senderName}</p>
+                                )}
+                                <p className="text-sm leading-relaxed text-gray-900 break-words">{m.message}</p>
+                                <p className="text-xs mt-1 text-gray-400 text-right">
+                                  {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Input Bar */}
+                      <div className="flex flex-col gap-1 px-3 py-2.5 bg-white border-t border-gray-100">
+                        {/* Typing indicator */}
+                        {ownerTyping && ownerTyping.bookingId === selectedBooking?.bookingId && (
+                          <div className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded-lg">
+                            <span className="text-xs text-gray-500 font-medium italic">
+                              {ownerTyping.name} {t("booking.isTyping")}
+                            </span>
+                            <span className="flex gap-0.5 items-center">
+                              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={newMessage}
+                            onChange={e => handleMessageChange(e.target.value)}
+                            placeholder={t("booking.writeMessage")}
+                            className="flex-1 rounded-full px-4 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none border border-gray-100 bg-gray-50"
+                            onKeyPress={e => e.key === "Enter" && handleSendMessage()}
+                          />
+                          <button
+                            onClick={handleSendMessage}
+                            disabled={!newMessage.trim()}
+                            className="w-9 h-9 rounded-full flex items-center justify-center bg-purple-600 hover:bg-purple-700 disabled:opacity-40 transition-all flex-shrink-0"
+                          >
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Timestamps */}
-                  <div className="p-4 bg-gray-300 text-sm text-gray-800 flex justify-between font-bold rounded-b-xl">
-                    <span>Created: {new Date(selectedBooking.createdAt).toLocaleString()}</span>
-                    <span>Updated: {new Date(selectedBooking.updatedAt).toLocaleString()}</span>
                   </div>
-                </div>
-              ) : (
-                <div className="bg-gray-100 rounded-xl p-12 text-center text-gray-700 shadow-lg">
-                  <div className="text-7xl mb-4">📋</div>
-                  <p className="font-black text-lg">Select a booking to view details</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Upload Receipt Modal */}
-      {showReceiptModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-full max-w-md mx-4 shadow-2xl">
-            <div className="p-5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-t-xl">
-              <h3 className="text-2xl font-black text-white">📤 Upload Payment Receipt</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-800 mb-4 font-bold">
-                Select your payment receipt image or PDF file from your device.
-              </p>
-              <div className="mb-4">
-                <label className="block text-sm font-black text-gray-900 mb-2">Receipt File</label>
-                <div className="border-3 border-dashed border-green-400 rounded-xl p-6 text-center hover:bg-green-50 hover:border-green-500 transition-all cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleReceiptFileChange}
-                    className="hidden"
-                    id="receipt-file-input"
-                  />
-                  <label htmlFor="receipt-file-input" className="cursor-pointer block">
-                    {receiptFile ? (
-                      <div>
-                        <div className="text-green-500 text-5xl mb-3">✓</div>
-                        <p className="text-gray-900 font-black text-lg">{receiptFile.name}</p>
-                        <p className="text-gray-600 text-sm font-semibold">{(receiptFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-green-400 text-5xl mb-3">📁</div>
-                        <p className="text-gray-800 font-bold text-lg">Click to select file</p>
-                        <p className="text-gray-500 text-sm font-semibold">JPG, PNG, GIF, WebP or PDF (max 10MB)</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-                {receiptPreview && (
-                  <div className="mt-4">
-                    <img src={receiptPreview} alt="Preview" className="max-h-48 rounded-xl mx-auto border-2 border-green-300 shadow-lg" />
+                ) : (
+                  <div className="p-8 text-center text-gray-400 text-xs">
+                    {t("booking.selectBooking")}
                   </div>
                 )}
               </div>
             </div>
-            <div className="flex gap-3 justify-end p-5 bg-gray-200 rounded-b-xl">
-              <button 
-                onClick={() => { setShowReceiptModal(false); setReceiptFile(null); setReceiptPreview(null); }} 
-                className="px-5 py-3 text-gray-800 hover:bg-gray-300 rounded-xl font-black bg-gray-100 border-2 border-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUploadReceipt}
-                disabled={!receiptFile || actionLoading}
-                className="bg-green-600 text-white px-5 py-3 rounded-xl font-black hover:bg-green-700 disabled:opacity-50 shadow-md"
-              >
-                {actionLoading ? "Uploading..." : "Upload Receipt"}
+          )}
+        </div>
+      </div>
+
+      {/* Receipt full-screen zoom overlay */}
+      {zoomedReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90" onClick={() => setZoomedReceipt(null)}>
+          <button onClick={() => setZoomedReceipt(null)} className="absolute top-4 right-4 w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-900 font-black text-lg hover:bg-gray-200 transition-all z-10">✕</button>
+          <div className="relative w-full mx-4" style={{ maxWidth: '900px', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={zoomedReceipt} alt="Receipt" className="rounded-xl object-contain w-full h-auto" style={{ maxHeight: '90vh' }} />
+            <div className="absolute bottom-4 right-4">
+              <button onClick={handleDownloadReceipt}
+                className="px-4 py-2 text-sm font-bold text-white bg-black bg-opacity-60 border border-white/30 rounded-lg hover:bg-opacity-80 transition-all">
+                Download
               </button>
             </div>
           </div>
@@ -582,35 +692,19 @@ export default function ClientBookingsPage() {
 
       {/* Report Problem Modal */}
       {showProblemModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-full max-w-md mx-4 shadow-2xl">
-            <div className="p-5 bg-red-300 rounded-t-xl">
-              <h3 className="text-2xl font-black text-red-900">⚠️ Report a Problem</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-800 mb-4 font-bold">
-                Describe the issue you're experiencing. The admin will be notified and will contact both you and the hotel owner.
-              </p>
-              <div className="mb-4">
-                <textarea
-                  value={problemReport}
-                  onChange={(e) => setProblemReport(e.target.value)}
-                  className="w-full bg-gray-100 rounded-xl px-4 py-3 focus:ring-2 focus:ring-red-500 font-bold"
-                  rows={4}
-                  placeholder="Describe your problem..."
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end p-5 bg-gray-300 rounded-b-xl">
-              <button onClick={() => setShowProblemModal(false)} className="px-5 py-3 text-gray-800 hover:bg-gray-400 rounded-xl font-black bg-gray-200">
-                Cancel
-              </button>
-              <button
-                onClick={handleReportProblem}
-                disabled={!problemReport.trim() || actionLoading}
-                className="bg-red-600 text-white px-5 py-3 rounded-xl font-black hover:bg-red-700 disabled:opacity-50 shadow-md"
-              >
-                {actionLoading ? "Reporting..." : "Report Problem"}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl shadow-2xl p-5 w-80">
+            <h3 className="text-sm font-bold text-gray-900 mb-1">{t("booking.reportAProblem")}</h3>
+            <p className="text-xs text-gray-500 mb-3">Booking {selectedBooking?.bookingId} — {selectedBooking?.hotel.name}</p>
+            <textarea value={problemReport} onChange={e => setProblemReport(e.target.value)}
+              placeholder={t("booking.describeTheProblem")} rows={3}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowProblemModal(false); setProblemReport(""); }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={handleReportProblem} disabled={actionLoading || !problemReport.trim()}
+                className="bg-red-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50">
+                {actionLoading ? t("booking.reporting") : t("booking.report")}
               </button>
             </div>
           </div>
