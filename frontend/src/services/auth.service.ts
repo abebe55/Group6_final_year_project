@@ -43,6 +43,7 @@ interface TokenPairResponse {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  expiresAt?: string;
 }
 
 interface PasswordResetResponse {
@@ -72,18 +73,35 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ LOGIN ERROR:', response.status, errorText);
+      console.log('❌ LOGIN ERROR:', response.status, errorText);
+      
+      // Try to parse JSON error for better message
+      let errorMessage = "Login failed";
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorJson.message || errorText;
+      } catch {
+        errorMessage = errorText;
+      }
       
       // Handle specific error cases
       if (response.status === 423) {
         throw new Error("Account is locked due to too many failed attempts. Please try again later or reset your password.");
+      } else if (response.status === 429) {
+        throw new Error(errorMessage || "Too many requests from this IP address. Please try again later.");
       } else if (response.status === 401) {
+        if (errorMessage.toLowerCase().includes('inactive') || errorMessage.toLowerCase().includes('blocked')) {
+          throw new Error("Your account has been deactivated or blocked. Please contact the administrator for more information.");
+        }
+        if (errorMessage.toLowerCase().includes('locked')) {
+          throw new Error(errorMessage);
+        }
         throw new Error("Invalid username/email or password.");
       } else if (response.status === 403) {
         throw new Error("Email verification required. Please check your email and verify your account.");
       }
       
-      throw new Error(errorText || `Login failed: ${response.status}`);
+      throw new Error(errorMessage || `Login failed: ${response.status}`);
     }
 
     const result = await response.json();
@@ -91,7 +109,7 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
     
     return result;
   } catch (error) {
-    console.error('❌ LOGIN NETWORK ERROR:', error);
+    console.log('❌ LOGIN NETWORK ERROR:', error);
     throw error;
   }
 };
@@ -334,10 +352,10 @@ export const checkEmailVerified = async (email: string): Promise<EmailVerificati
 
 // Token Refresh Methods
 export const refreshToken = async (refreshToken: string): Promise<TokenPairResponse> => {
-  console.log('🔐 REFRESH TOKEN → /auth/refresh-token');
+  console.log('🔐 REFRESH TOKEN → /auth/refresh');
   
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
