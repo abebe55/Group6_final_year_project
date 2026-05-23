@@ -1,8 +1,0 @@
-{
-  "/page": "app/page.js",
-  "/owner/bookings/page": "app/owner/bookings/page.js",
-  "/tourisms/page": "app/tourisms/page.js",
-  "/bookings/page": "app/bookings/page.js",
-  "/owner/dashboard/page": "app/owner/dashboard/page.js",
-  "/auth/login/page": "app/auth/login/page.js"
-}
