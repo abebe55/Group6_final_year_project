@@ -4,16 +4,22 @@ export interface AuditLogEntry {
   id: number;
   userId?: number;
   username?: string;
+  user?: { id: number; username: string; email?: string };
   action: string;
+  entityType: string;
+  entityId?: number;
   resourceType?: string;
-  resourceId?: string;
-  details?: Record<string, any>;
-  ipAddress: string;
+  resourceId?: number;
+  changes?: string;
+  ipAddress?: string;
   userAgent?: string;
-  timestamp: string;
-  sessionId?: string;
-  severity: string;
-  category: string;
+  createdAt: string;
+  status?: string;
+  errorMessage?: string;
+  // Computed fields for display
+  timestamp?: string;
+  severity?: string;
+  category?: string;
   description?: string;
   integrityVerified?: boolean;
 }
@@ -23,6 +29,7 @@ export interface AuditLogSearchParams {
   username?: string;
   action?: string;
   resourceType?: string;
+  resourceId?: number;
   category?: string;
   severity?: string;
   ipAddress?: string;

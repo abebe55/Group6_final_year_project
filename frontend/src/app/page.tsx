@@ -1,158 +1,256 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TopBar from "@/components/layout/TopBar";
 import Footer from "@/components/layout/Footer";
+import { API_BASE_URL } from "@/services/api";
+import { getImageUrl } from "@/utils/imageUrl";
+import { useTranslation } from "react-i18next";
+
+const TNR = "'Times New Roman', Times, serif";
+
+interface HeroImage { id: number; imageUrl: string; title?: string; description?: string; }
 
 export default function HomePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  
+  const [heroImages, setHeroImages] = useState<HeroImage[]>([]);
+
+  // Fetch hero images from DB
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/tourisms/public/hero-images`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: HeroImage[]) => { if (data.length) setHeroImages(data); })
+      .catch(() => {});
+  }, []);
+
   const categories = [
-    { id: "HERITAGE", name: "Heritage", desc: "Ancient churches & monuments", icon: "🕌", gradient: "from-amber-500 to-orange-600" },
-    { id: "HIGHLAND", name: "Highland", desc: "Mountain peaks & valleys", icon: "⛰️", gradient: "from-emerald-500 to-teal-600" },
-    { id: "CAVERN", name: "Cavern", desc: "Mysterious caves", icon: "🕳️", gradient: "from-purple-500 to-indigo-600" },
-    { id: "AQUATICS", name: "Aquatics", desc: "Lakes & waterfalls", icon: "🌊", gradient: "from-cyan-500 to-blue-600" },
-    { id: "CULTURE", name: "Culture", desc: "Local traditions", icon: "🎭", gradient: "from-rose-500 to-pink-600" },
-    { id: "MODERN", name: "Modern", desc: "Contemporary attractions", icon: "🏛️", gradient: "from-slate-600 to-gray-700" },
+    { id: "HERITAGE", name: t("categories.HERITAGE"), icon: "🏛️", short: t("categories.heritageDesc"), accent: "#92400e", border: "#fbbf24", selBorder: "#d97706", bgNorm: "#fffbeb", bgSel: "#fef3c7" },
+    { id: "HIGHLAND", name: t("categories.HIGHLAND"), icon: "⛰️", short: t("categories.highlandDesc"), accent: "#065f46", border: "#6ee7b7", selBorder: "#059669", bgNorm: "#f0fdf4", bgSel: "#d1fae5" },
+    { id: "CAVERN",   name: t("categories.CAVERN"),   icon: "🕳️", short: t("categories.cavernDesc"),   accent: "#3b0764", border: "#c4b5fd", selBorder: "#7c3aed", bgNorm: "#faf5ff", bgSel: "#ede9fe" },
+    { id: "AQUATICS", name: t("categories.AQUATICS"), icon: "💧", short: t("categories.aquaticsDesc"), accent: "#0c4a6e", border: "#7dd3fc", selBorder: "#0284c7", bgNorm: "#f0f9ff", bgSel: "#e0f2fe" },
+    { id: "CULTURE",  name: t("categories.CULTURE"),  icon: "🎭", short: t("categories.cultureDesc"),  accent: "#881337", border: "#fda4af", selBorder: "#e11d48", bgNorm: "#fff1f2", bgSel: "#ffe4e6" },
+    { id: "MODERN",   name: t("categories.MODERN"),   icon: "🏙️", short: t("categories.modernDesc"),   accent: "#1e3a5f", border: "#94a3b8", selBorder: "#475569", bgNorm: "#f8fafc", bgSel: "#e2e8f0" },
   ];
 
-  const toggleCategory = (categoryId: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(categoryId) 
-        ? prev.filter(c => c !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
+  const toggleCategory = (id: string) =>
+    setSelectedCategories(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
 
   const handleViewSelected = () => {
-    if (selectedCategories.length === 0) return;
+    if (!selectedCategories.length) return;
     router.push(`/tourisms?categories=${selectedCategories.join(",")}&sortBy=viewersCount&sortDir=desc`);
   };
 
-  const handleSelectAll = () => {
-    if (selectedCategories.length === categories.length) {
-      setSelectedCategories([]);
-    } else {
-      setSelectedCategories(categories.map(c => c.id));
-    }
-  };
+  const handleSelectAll = () =>
+    setSelectedCategories(prev => prev.length === categories.length ? [] : categories.map(c => c.id));
+
+  // Page-wide background: soft blue-gray matching the screenshot
+  const pageBg = "#cfd8e3";
 
   return (
-    <div className="min-h-screen bg-slate-900 relative overflow-hidden">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-emerald-600 rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-blob" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-teal-600 rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-600 rounded-full mix-blend-screen filter blur-[100px] opacity-15 animate-blob animation-delay-4000" />
-      </div>
+    <div className="min-h-screen" style={{ background: pageBg, fontFamily: TNR }}>
       <TopBar showCategories={false} />
-      <section className="relative w-full h-[450px] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/60 via-teal-900/50 to-slate-900/60" />
-        <img src="/images/hero.jpg" alt="North Wollo" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="relative z-10 text-center text-white px-4 max-w-3xl mx-auto">
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-black mb-3 leading-tight drop-shadow-2xl">Explore North Wollo</h1>
+
+      {/* ── Hero ── */}
+      <section className="px-4 sm:px-6 py-4" style={{ background: pageBg }}>
+        <div className="relative w-full h-[220px] sm:h-[300px] md:h-[360px] overflow-hidden rounded-2xl"
+          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.22)" }}>
+
+          {/* Dark overlay */}
+          <div className="absolute inset-0 z-10 pointer-events-none"
+            style={{ background: "linear-gradient(to bottom,rgba(0,0,0,0.35) 0%,rgba(0,0,0,0.15) 50%,rgba(0,0,0,0.45) 100%)" }} />
+
+          {/* Scrolling strip */}
+          {heroImages.length > 0 ? (
+            <div className="absolute inset-0 flex items-stretch"
+              style={{
+                display: 'flex',
+                width: 'max-content',
+                animation: `heroScroll ${heroImages.length * 6}s linear infinite`,
+              }}>
+              {/* Duplicate for seamless loop */}
+              {[...heroImages, ...heroImages].map((img, i) => (
+                <img key={i} src={getImageUrl(img.imageUrl)} alt={img.title || 'Hero'}
+                  style={{ height: '100%', width: 'auto', flexShrink: 0, display: 'block' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ))}
+            </div>
+          ) : (
+            <img src="/images/hero.jpg" alt="North Wollo" className="absolute inset-0 w-full h-full object-cover" />
+          )}
+
+          {/* Text overlay */}
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-white px-4">
+            <h1 style={{ fontFamily: TNR, textShadow: "0 3px 18px rgba(0,0,0,0.65)", letterSpacing: "0.03em", fontWeight: 700 }}
+              className="text-2xl sm:text-4xl md:text-5xl mb-3 leading-tight text-center"
+              suppressHydrationWarning>
+              {t("home.heroTitle")}
+            </h1>
+            <p style={{ fontFamily: TNR, textShadow: "0 2px 8px rgba(0,0,0,0.55)", fontStyle: "italic", fontSize: "1.05rem" }}
+              className="text-gray-100 text-center"
+              suppressHydrationWarning>
+              {t("home.heroSubtitle")}
+            </p>
+          </div>
         </div>
       </section>
-
-      <section className="px-4 py-6 bg-gradient-to-r from-emerald-900/90 via-slate-900/95 to-emerald-900/90 backdrop-blur-sm">
+      <section style={{
+        background: "#dde4ed",
+        boxShadow: "0 8px 40px rgba(0,0,0,0.28), inset 0 2px 12px rgba(0,0,0,0.10)",
+        borderBottom: "1px solid #c5cfd9",
+      }} className="px-4 sm:px-6 py-5">
         <div className="max-w-6xl mx-auto">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-4">
-              <Link href="/tourisms" className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-full hover:from-emerald-600 hover:to-teal-600 shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all">Explore Places</Link>
-              <button onClick={handleSelectAll} className="text-sm font-bold text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
-                {selectedCategories.length === categories.length ? "Clear All" : "Select All"}
-              </button>
-              {selectedCategories.length > 0 && <span className="text-sm text-slate-400 font-medium">{selectedCategories.length} selected</span>}
-            </div>
-            <button onClick={handleViewSelected} disabled={selectedCategories.length === 0}
-              className={`inline-flex items-center gap-2 px-5 py-2 font-bold rounded-full text-sm transition-all ${selectedCategories.length > 0 ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700" : "bg-slate-700 text-slate-500 cursor-not-allowed"}`}>
-              <span>🔍</span>
-              <span>{selectedCategories.length === 0 ? "Select Categories" : `View ${selectedCategories.length}`}</span>
+
+          {/* Row 1: Select Categories label | View All Places | Select All */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {/* Plain label — no background */}
+            <span style={{ fontFamily: TNR, fontSize: "0.82rem", fontWeight: 600, color: "#6b7280" }} className="flex-shrink-0">
+              {!selectedCategories.length ? t("home.selectCategories") : `${selectedCategories.length} ${t("home.selected")}`}
+            </span>
+
+            <Link href="/tourisms"
+              style={{ fontFamily: TNR, fontWeight: 700, fontSize: "0.82rem", background: "white", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+              className="px-3 py-1.5 text-blue-600 hover:text-blue-800 rounded-full transition-all flex-shrink-0">
+              {t("home.viewAllPlaces")}
+            </Link>
+
+            <button onClick={handleSelectAll}
+              style={{ fontFamily: TNR, fontSize: "0.82rem", fontWeight: 700, background: "white", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+              className="px-3 py-1.5 text-blue-600 hover:text-blue-800 rounded-full transition-all flex-shrink-0">
+              {selectedCategories.length === categories.length ? t("home.clearAll") : t("home.selectAll")}
             </button>
+
+            {selectedCategories.length > 0 && (
+              <button onClick={handleViewSelected}
+                style={{ fontFamily: TNR, fontSize: "0.82rem", fontWeight: 700, background: "white", border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+                className="px-3 py-1.5 text-emerald-600 hover:text-emerald-800 rounded-full transition-all flex-shrink-0">
+                {t("home.viewSelected", { count: selectedCategories.length })}
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+
+          {/* Row 2: Category cards — 2 cols on mobile, 3 on tablet, 6 on desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" style={{ marginBottom: "24px" }}>
             {categories.map((cat) => {
-              const isSelected = selectedCategories.includes(cat.id);
+              const sel = selectedCategories.includes(cat.id);
               return (
-                <button key={cat.id} onClick={() => toggleCategory(cat.id)} className={`group relative overflow-hidden rounded-xl transition-all duration-300 text-left ${isSelected ? "ring-2 ring-emerald-500 ring-offset-1 shadow-lg scale-[1.02]" : "shadow-md hover:shadow-lg hover:scale-[1.01]"}`}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${cat.gradient} ${isSelected ? "opacity-100" : "opacity-80"} transition-opacity`} />
-                  <div className={`absolute top-2 right-2 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? "bg-white border-white" : "bg-white/20 border-white/50"}`}>
-                    {isSelected && <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                  </div>
-                  <div className="relative p-3 flex items-center gap-2">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${isSelected ? "bg-white/30 scale-110" : "bg-white/20"}`}>{cat.icon}</div>
-                    <div className="flex-1"><h3 className="text-sm font-bold text-white">{cat.name}</h3></div>
+                <button key={cat.id} onClick={() => toggleCategory(cat.id)}
+                  style={{
+                    fontFamily: TNR,
+                    borderRadius: "16px",
+                    border: "none",
+                    minHeight: "115px",
+                    background: "#ffffff",
+                    boxShadow: sel
+                      ? `0 8px 22px rgba(0,0,0,0.18), inset 0 2px 0 rgba(255,255,255,1)`
+                      : `0 4px 14px rgba(0,0,0,0.12), inset 0 2px 0 rgba(255,255,255,1)`,
+                    transition: "all 0.2s ease",
+                  }}
+                  className="text-left hover:scale-[1.03] hover:-translate-y-1 transition-all">
+                  <div className="p-3 flex flex-col gap-2 h-full">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div style={{
+                          background: `${cat.selBorder}18`,
+                          border: `1.5px solid ${cat.border}`,
+                          borderRadius: "50%",
+                        }} className="w-8 h-8 flex items-center justify-center text-base flex-shrink-0">
+                          {cat.icon}
+                        </div>
+                        <h3 style={{ color: cat.accent, fontWeight: 900, fontSize: "0.88rem" }}>
+                          {cat.name}
+                        </h3>
+                      </div>
+                      {/* Square checkbox */}
+                      <div style={{
+                        width: "16px", height: "16px", flexShrink: 0,
+                        border: `2.5px solid #111827`,
+                        background: sel ? "#111827" : "#ffffff",
+                        borderRadius: "3px",
+                        transition: "all 0.2s ease",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {sel && (
+                          <svg style={{ width: "9px", height: "9px" }}
+                            fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    <p style={{ color: "#374151", fontSize: "12px", lineHeight: "1.5", fontWeight: 700 }}>
+                      {cat.short}
+                    </p>
                   </div>
                 </button>
               );
             })}
           </div>
-        </div>
-      </section>
 
-      <section id="about" className="px-4 py-8 bg-slate-900/80 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold text-white mb-3">Discover North Wollo&#39;s Rich Heritage</h2>
-              <p className="text-slate-400 mb-3 text-sm leading-relaxed">North Wollo Tourism is your gateway to exploring one of Ethiopia&#39;s most beautiful regions. Home to ancient churches, stunning highlands, mysterious caves, and vibrant cultural traditions.</p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-2 text-slate-300"><span className="text-emerald-400">✓</span> Verified Destinations</div>
-                <div className="flex items-center gap-2 text-slate-300"><span className="text-emerald-400">✓</span> Local Expert Guides</div>
-                <div className="flex items-center gap-2 text-slate-300"><span className="text-emerald-400">✓</span> Sustainable Tourism</div>
-                <div className="flex items-center gap-2 text-slate-300"><span className="text-emerald-400">✓</span> 24/7 Support</div>
+          {/* Row 3: Minimal stats card below the 6 buttons */}
+          <div style={{
+            background: "#e8edf3",
+            border: "1px solid #d0d8e4",
+            borderRadius: "0.75rem",
+          }} className="p-3 mt-6">
+            <div className="flex flex-wrap items-center gap-4">
+              <div style={{ fontFamily: TNR, color: "#1e293b", fontWeight: 700, fontSize: "0.9rem" }}>
+                {t("common.northWolloTourism")} — Est. 2026
+              </div>
+              <div className="flex flex-wrap gap-4">
+                {[["2026", t("home.established")],["100%", t("home.localTeam")],["50+", t("home.destinations")],["21", t("home.woredasCovered")]].map(([val, lbl]) => (
+                  <div key={lbl} className="text-center">
+                    <div style={{ fontFamily: TNR, color: "#2563eb", fontWeight: 700, fontSize: "1.1rem" }}>{val}</div>
+                    <div style={{ fontFamily: TNR, color: "#64748b", fontSize: "12px", fontWeight: 600 }}>{lbl}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex-1 hidden md:block" />
+              <div style={{ fontFamily: TNR, color: "#475569", fontSize: "12px", fontWeight: 600, fontStyle: "italic" }} className="hidden md:block">
+                {t("home.footerNote")}
               </div>
             </div>
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl p-5 text-white border border-emerald-500/30">
-              <h3 className="text-lg font-bold mb-2">Our Vision</h3>
-              <p className="text-xs opacity-90 mb-3">To make North Wollo a world-renowned tourism destination while empowering local communities.</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2 text-center"><div className="text-xl font-bold">2025</div><div className="text-xs opacity-80">Established</div></div>
-                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2 text-center"><div className="text-xl font-bold">100%</div><div className="text-xs opacity-80">Local Team</div></div>
-              </div>
-            </div>
           </div>
+
         </div>
       </section>
 
-      <section id="contact" className="px-4 py-8 bg-slate-950 text-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-4"><h2 className="text-xl md:text-2xl font-bold mb-1">Get in Touch</h2></div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-4 text-center hover:bg-slate-800 transition-colors border border-slate-700/50"><span className="text-xl mb-1 block">📍</span><h3 className="font-semibold text-sm mb-0.5">Visit Us</h3><p className="text-xs text-slate-400">Woldia, North Wollo Zone</p></div>
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-4 text-center hover:bg-slate-800 transition-colors border border-slate-700/50"><span className="text-xl mb-1 block">📞</span><h3 className="font-semibold text-sm mb-0.5">Call Us</h3><p className="text-xs text-slate-400">+251 911 234 567</p></div>
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-lg p-4 text-center hover:bg-slate-800 transition-colors border border-slate-700/50"><span className="text-xl mb-1 block">📧</span><h3 className="font-semibold text-sm mb-0.5">Email Us</h3><p className="text-xs text-slate-400">info@northwollotourism.com</p></div>
+      {/* ── Newsletter ── */}
+      <section className="px-4 sm:px-6 py-7" style={{
+        background: pageBg,
+        borderTop: "1px solid #b8c4d0",
+        borderBottom: "1px solid #b8c4d0",
+        boxShadow: "inset 0 2px 8px rgba(0,0,0,0.06)",
+      }}>
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="text-center md:text-left">
+            <h3 style={{ fontFamily: TNR, fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.03em", color: "#1e293b" }}>
+              {t("home.stayUpdated")}
+            </h3>
+            <p style={{ fontFamily: TNR, fontSize: "0.78rem", fontStyle: "italic", color: "#64748b" }} className="mt-0.5">
+              {t("home.newsletterSubtitle")}
+            </p>
           </div>
-          <div className="flex justify-center gap-2">
-            <a href="#" className="w-9 h-9 bg-slate-700 hover:bg-blue-600 rounded-full flex items-center justify-center transition-colors text-base">📘</a>
-            <a href="#" className="w-9 h-9 bg-slate-700 hover:bg-sky-500 rounded-full flex items-center justify-center transition-colors text-base">🐦</a>
-            <a href="#" className="w-9 h-9 bg-slate-700 hover:bg-pink-600 rounded-full flex items-center justify-center transition-colors text-base">📷</a>
-            <a href="#" className="w-9 h-9 bg-slate-700 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors text-base">▶️</a>
-            <a href="#" className="w-9 h-9 bg-slate-700 hover:bg-blue-500 rounded-full flex items-center justify-center transition-colors text-base">✈️</a>
+          <div className="flex gap-2 w-full md:w-auto">
+            <input type="email" placeholder={t("home.emailPlaceholder")}
+              style={{ fontFamily: TNR, background: "rgba(255,255,255,0.8)", border: "1px solid #cbd5e1", fontSize: "0.88rem", color: "#1e293b" }}
+              className="flex-1 md:w-56 px-4 py-2.5 rounded-full placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            <button
+              type="button"
+              onClick={() => router.push('/auth/register')}
+              style={{ fontFamily: TNR, fontWeight: 600, fontSize: "0.88rem", background: "linear-gradient(135deg,#2563eb,#1d4ed8)", boxShadow: "0 3px 10px rgba(37,99,235,0.35)" }}
+              className="px-5 py-2.5 text-white rounded-full hover:scale-105 transition-all">
+              {t("home.subscribe")}
+            </button>
           </div>
-        </div>
-      </section>
-
-      <section className="px-4 py-5 bg-gradient-to-r from-emerald-600 to-teal-600">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="text-white text-center md:text-left"><h3 className="text-lg font-bold">Stay Updated</h3></div>
-          <form className="flex gap-2 w-full md:w-auto">
-            <input type="email" placeholder="Enter your email" className="flex-1 md:w-56 px-3 py-2 rounded-lg bg-white/20 backdrop-blur-sm text-white placeholder-emerald-100 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 border border-white/30" />
-            <button type="submit" className="px-5 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors text-sm">Subscribe</button>
-          </form>
         </div>
       </section>
 
       <Footer />
-
-      <style jsx>{`
-        @keyframes blob { 0% { transform: translate(0px, 0px) scale(1); } 33% { transform: translate(30px, -50px) scale(1.1); } 66% { transform: translate(-20px, 20px) scale(0.9); } 100% { transform: translate(0px, 0px) scale(1); } }
-        .animate-blob { animation: blob 7s infinite; }
-        .animation-delay-2000 { animation-delay: 2s; }
-        .animation-delay-4000 { animation-delay: 4s; }
-      `}</style>
     </div>
   );
 }

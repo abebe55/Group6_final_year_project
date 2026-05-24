@@ -1,0 +1,17 @@
+{
+  "name": "north-wollo-tourism-system",
+  "version": "1.0.0",
+  "description": "North Wollo Tourism Management System",
+  "scripts": {
+    "install": "cd backend-nodejs && npm install",
+    "build": "cd backend-nodejs && npx prisma migrate deploy",
+    "start": "cd backend-nodejs && npm start",
+    "postinstall": "cd backend-nodejs && npx prisma generate"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "prisma": {
+    "schema": "backend-nodejs/prisma/schema.prisma"
+  }
+}

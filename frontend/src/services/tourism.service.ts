@@ -1,4 +1,5 @@
 import { api, API_BASE_URL } from "./api";
+import { TourismFullDetailDto } from "@/types/tourism";
 
 // ========================
 // Pagination interface – matches Spring Boot Page<T>
@@ -45,6 +46,8 @@ interface FetchParams {
   kebele?: string;
   page?: number;
   size?: number;
+  sortBy?: string;
+  sortDir?: string;
 }
 
 // ========================
@@ -120,37 +123,7 @@ export interface NearbyTourismDto {
   wereda?: string;
 }
 
-export interface RatingSummaryResponseDto {
-  avgRating: number;
-  totalRatings: number;
-}
-
-export interface TourismRatingResponseDto {
-  id: number;
-  rating: number;
-  comment?: string;
-  userFullName: string;
-  createdAt: string;
-}
-
-export interface TourismFullDetailDto {
-  id: number;
-  name: string;
-  description: string;
-  wereda: string;
-  kebele: string;
-  bestTime?: string;
-  peaceInfo?: string;
-  visitTime?: string;
-  languages: string[];
-  viewersCount: number;
-  category?: string;
-  createdAt?: string;
-  images: string[];
-  nearbyPlaces: NearbyTourismDto[];
-  ratingSummary: RatingSummaryResponseDto;
-  ratings: TourismRatingResponseDto[];
-}
+// TourismFullDetailDto is imported from @/types/tourism
 
 // ========================
 // Fetch tourism detail (auth + public fallback)
@@ -170,20 +143,28 @@ export const fetchTourismDetail = async (tourismId: number, token?: string): Pro
 };
 
 // ========================
-// Submit tourism rating
+// Increment view count
 // ========================
-export interface TourismRatingRequestDto {
-  rating: number;
-  comment?: string;
+export interface IncrementViewResponse {
+  counted: boolean;
+  viewCount: number;
 }
 
-export const submitTourismRating = async (
+export const incrementTourismView = async (
   tourismId: number,
-  rating: number,
-  comment: string | undefined,
-  token: string
-): Promise<TourismRatingResponseDto> => {
-  const payload: TourismRatingRequestDto = { rating, comment };
-  const res = await api.post<TourismRatingResponseDto>(`/tourisms/${tourismId}/rate`, payload, token);
-  return res as unknown as TourismRatingResponseDto;
+  sessionId: string,
+  ipAddress?: string,
+  userAgent?: string
+): Promise<IncrementViewResponse> => {
+  const response = await fetch(`${API_BASE_URL}/tourisms/${tourismId}/increment-view`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, ipAddress, userAgent }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to increment view: ${response.status}`);
+  }
+
+  return response.json();
 };

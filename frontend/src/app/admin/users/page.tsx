@@ -6,11 +6,16 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useRouter } from 'next/navigation';
 import { FormButton, Alert } from '@/components/common/FormInput';
 import Pagination from '@/components/common/Pagination';
+import { useToast } from '@/components/common/Toast';
+import { useConfirm } from '@/components/common/ConfirmDialog';
+import TopBar from '@/components/layout/TopBar';
 
 const AVAILABLE_ROLES = ['CLIENT', 'HOTEL_OWNER', 'ADMIN'];
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 30, 50];
 
 const UsersManagementPage = () => {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +23,7 @@ const UsersManagementPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [sortBy, setSortBy] = useState('id');
+  const [sortBy, setSortBy] = useState('username');
   const [sortDir, setSortDir] = useState('asc');
   const [pageSize, setPageSize] = useState(15);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -27,6 +31,9 @@ const UsersManagementPage = () => {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [actionSuccess, setActionSuccess] = useState('');
   
+  // For tourism place search in role modal
+  const [tourismSearch, setTourismSearch] = useState('');
+  const [showTourismDrop, setShowTourismDrop] = useState(false);
   // For HOTEL_OWNER role assignment with tourism place and hotel selection
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [tourisms, setTourisms] = useState<Tourism[]>([]);
@@ -61,6 +68,14 @@ const UsersManagementPage = () => {
     loadUsers();
   }, [isAuthenticated, role, loadUsers, router]);
 
+  // Debounced search - triggers search after user stops typing for 300ms
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      setCurrentPage(0);
+    }, 300);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm]);
+
   // Auto-hide success message
   useEffect(() => {
     if (actionSuccess) {
@@ -69,9 +84,18 @@ const UsersManagementPage = () => {
     }
   }, [actionSuccess]);
 
-  const handleSearch = () => { setCurrentPage(0); setSearchTerm(searchInput); };
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); };
-  const handleClearSearch = () => { setSearchInput(''); setSearchTerm(''); setCurrentPage(0); };
+  // Close tourism dropdown when clicking outside
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.tourism-search-drop')) {
+        setShowTourismDrop(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const handleClearSearch = () => { setSearchTerm(''); setCurrentPage(0); };
   const handleSort = (field: string) => {
     if (sortBy === field) { setSortDir(sortDir === 'asc' ? 'desc' : 'asc'); }
     else { setSortBy(field); setSortDir('asc'); }
@@ -91,7 +115,9 @@ const UsersManagementPage = () => {
   };
 
   const handleDeactivateUser = async (userId: number) => {
-    if (!token || !confirm('Are you sure you want to deactivate this user?')) return;
+    if (!token) return;
+    const ok = await confirm({ message: 'Are you sure you want to deactivate this user?', variant: 'warning', title: 'Deactivate User', confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!ok) return;
     try { 
       setActionLoading(userId); 
       await AdminUserService.deactivateUser(token, userId); 
@@ -103,7 +129,9 @@ const UsersManagementPage = () => {
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!token || !confirm('Are you sure you want to delete this user permanently? This action cannot be undone.')) return;
+    if (!token) return;
+    const ok = await confirm({ message: 'Are you sure you want to delete this user permanently? This action cannot be undone.', variant: 'danger', title: 'Delete User', confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!ok) return;
     try { 
       setActionLoading(userId); 
       await AdminUserService.deleteUser(token, userId); 
@@ -144,7 +172,8 @@ const UsersManagementPage = () => {
     try {
       setTourismsLoading(true);
       const response = await AdminTourismService.getAllTourism(token, 0, 100);
-      setTourisms(response.content);
+      const sorted = (response.content || []).sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+      setTourisms(sorted);
     } catch (err) {
       console.error('Failed to load tourism places:', err);
     } finally {
@@ -210,7 +239,9 @@ const UsersManagementPage = () => {
   };
 
   const handleRevokeRole = async (userId: number, r: string) => {
-    if (!token || !confirm(`Are you sure you want to revoke the ${r} role from this user?`)) return;
+    if (!token) return;
+    const ok = await confirm({ message: `Are you sure you want to revoke the ${r} role from this user?`, variant: 'warning', title: 'Revoke Role', confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!ok) return;
     try { 
       setActionLoading(userId); 
       await AdminUserService.revokeRole(token, userId, r); 
@@ -239,21 +270,17 @@ const UsersManagementPage = () => {
   if (!isAuthenticated || role !== 'ADMIN') return <div className="p-8 text-center">Access denied.</div>;
 
   return (
-    <div className="min-h-screen bg-gray-200 admin-page">
-      <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
-        <button
-          onClick={() => router.push('/admin')}
-          className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          <span className="font-bold">Back to Dashboard</span>
-        </button>
-        <h1 className="text-3xl font-black text-white mb-2">👥 User Management</h1>
-        <p className="text-blue-200 font-semibold">Manage user accounts, roles, and permissions</p>
-      </div>
+    <div className="min-h-screen bg-white admin-page">
+      <TopBar 
+        showCategories={false} 
+        showBackButton={false} 
+        pageTitle="User Management" 
+        showAdminMenu={true}
+        keyword={searchTerm}
+        onSearch={(value) => { setSearchTerm(value); setCurrentPage(0); }}
+        liveSearch={true}
+      />
+      <div className="container mx-auto px-4 pt-1 pb-8">
 
       {/* Success/Error Messages */}
       {actionSuccess && (
@@ -266,28 +293,6 @@ const UsersManagementPage = () => {
           <Alert type="error" message={error} onClose={() => setError(null)} />
         </div>
       )}
-
-      {/* Search Bar */}
-      <div className="bg-blue-100 rounded-xl shadow-xl p-6 mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex-1 max-w-lg flex gap-2">
-            <div className="relative flex-1">
-              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input type="text" placeholder="Search by name, email, username..." value={searchInput} 
-                onChange={(e) => setSearchInput(e.target.value)} onKeyDown={handleKeyDown} 
-                className="w-full pl-10 pr-4 py-2 bg-white border-2 border-blue-300 text-gray-900 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold shadow-sm" />
-            </div>
-            <FormButton variant="primary" onClick={handleSearch}>Search</FormButton>
-            {searchTerm && <FormButton variant="secondary" onClick={handleClearSearch}>Clear</FormButton>}
-          </div>
-          <div className="text-sm text-gray-900 bg-white px-4 py-2 rounded-lg shadow-md font-bold">
-            {searchTerm && <span className="mr-2">Results for &quot;{searchTerm}&quot;:</span>}
-            Total: <span className="font-black text-blue-700">{totalElements}</span>
-          </div>
-        </div>
-      </div>
 
       {/* Users Table */}
       <div className="bg-indigo-100 rounded-xl shadow-xl overflow-hidden">
@@ -306,19 +311,19 @@ const UsersManagementPage = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-indigo-200">
-              <thead className="bg-indigo-200">
-                <tr>
-                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('username')}>
+              <thead>
+                <tr style={{ background: 'linear-gradient(to bottom, #f0f2f7, #e8ebf2)', boxShadow: '0 2px 6px rgba(0,0,0,0.13)' }}>
+                  <th className="px-3 py-1.5 text-left text-xs font-black text-gray-800 uppercase tracking-widest cursor-pointer hover:bg-gray-200/40 transition-colors border-b border-gray-200" onClick={() => handleSort('username')}>
                     User <SortIcon field="username" />
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('email')}>
+                  <th className="px-3 py-1.5 text-left text-xs font-black text-gray-800 uppercase tracking-widest cursor-pointer hover:bg-gray-200/40 transition-colors border-b border-gray-200" onClick={() => handleSort('email')}>
                     Email <SortIcon field="email" />
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider">Roles</th>
-                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider cursor-pointer hover:bg-indigo-300 transition-colors" onClick={() => handleSort('active')}>
+                  <th className="px-3 py-1.5 text-left text-xs font-black text-gray-800 uppercase tracking-widest border-b border-gray-200">Roles</th>
+                  <th className="px-3 py-1.5 text-left text-xs font-black text-gray-800 uppercase tracking-widest cursor-pointer hover:bg-gray-200/40 transition-colors border-b border-gray-200" onClick={() => handleSort('active')}>
                     Status <SortIcon field="active" />
                   </th>
-                  <th className="px-3 py-3 text-left text-xs font-black text-indigo-900 uppercase tracking-wider sticky right-0 bg-indigo-200">Actions</th>
+                  <th className="px-3 py-1.5 text-left text-xs font-black text-gray-800 uppercase tracking-widest sticky right-0 border-b border-gray-200" style={{ background: 'linear-gradient(to bottom, #f8f9fb, #f1f3f7)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-indigo-100 bg-white">
@@ -326,8 +331,8 @@ const UsersManagementPage = () => {
                   <tr key={user.id} className="hover:bg-indigo-50 transition-colors group">
                     <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                          <span className="text-white font-black text-sm">{user.fullName?.charAt(0) || user.username?.charAt(0) || '?'}</span>
+                        <div className="h-7 w-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-indigo-600 font-bold text-sm leading-none">{user.fullName?.charAt(0) || user.username?.charAt(0) || '?'}</span>
                         </div>
                         <div className="ml-2">
                           <div className="text-sm font-black text-gray-900">{user.fullName || 'N/A'}</div>
@@ -357,21 +362,24 @@ const UsersManagementPage = () => {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {user.roles?.map((r) => (
-                          <span key={r} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black border-2 shadow-sm ${getRoleBadgeColor(r.replace('ROLE_', ''))}`}>
-                            {r.replace('ROLE_', '')}
-                            <button onClick={() => handleRevokeRole(user.id, r.replace('ROLE_', ''))} 
-                              className="ml-1 hover:text-red-600 transition-colors text-xs font-black" title="Revoke role">×</button>
-                          </span>
-                        ))}
+                        {user.roles?.map((r) => {
+                          const roleName = typeof r === 'string' ? r : r.name;
+                          return (
+                            <span key={roleName} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black border-2 shadow-sm ${getRoleBadgeColor(roleName.replace('ROLE_', ''))}`}>
+                              {roleName.replace('ROLE_', '')}
+                              <button onClick={() => handleRevokeRole(user.id, roleName.replace('ROLE_', ''))} 
+                                className="ml-1 hover:text-red-600 transition-colors text-xs font-black" title="Revoke role">×</button>
+                            </span>
+                          );
+                        })}
                         <button onClick={() => { setSelectedUser(user); setShowRoleModal(true); }} 
-                          className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-all border-2 border-emerald-300 shadow-sm">
+                          className="px-2 py-0.5 rounded-full text-xs font-black bg-blue-100 text-blue-800 hover:bg-blue-200 transition-all shadow-sm">
                           + Add
                         </button>
                       </div>
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black shadow-sm ${user.active ? 'bg-emerald-200 text-emerald-800' : 'bg-red-200 text-red-800'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black shadow-sm ${user.active ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                         {user.active ? '✓ Active' : '✗ Inactive'}
                       </span>
                     </td>
@@ -384,14 +392,17 @@ const UsersManagementPage = () => {
                           </button>
                         ) : (
                           <button onClick={() => handleActivateUser(user.id)} disabled={actionLoading === user.id} 
-                            className="text-emerald-700 hover:text-emerald-800 font-black disabled:opacity-50 transition-colors text-xs bg-emerald-100 px-2 py-1 rounded shadow-sm">
+                            className="text-green-700 hover:text-green-800 font-black disabled:opacity-50 transition-colors text-xs bg-green-100 px-2 py-1 rounded shadow-sm">
                             {actionLoading === user.id ? '...' : 'Activate'}
                           </button>
                         )}
-                        <button onClick={() => handleDeleteUser(user.id)} disabled={actionLoading === user.id} 
-                          className="text-red-700 hover:text-red-800 font-black disabled:opacity-50 transition-colors text-xs bg-red-100 px-2 py-1 rounded shadow-sm">
-                          {actionLoading === user.id ? '...' : 'Delete'}
-                        </button>
+                        {/* Hide Delete button for ADMIN users — deleting an admin is forbidden */}
+                        {!user.roles?.some(r => (typeof r === 'string' ? r : r.name).replace('ROLE_', '') === 'ADMIN') && (
+                          <button onClick={() => handleDeleteUser(user.id)} disabled={actionLoading === user.id} 
+                            className="text-red-700 hover:text-red-800 font-black disabled:opacity-50 transition-colors text-xs bg-red-100 px-2 py-1 rounded shadow-sm">
+                            {actionLoading === user.id ? '...' : 'Delete'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -403,7 +414,7 @@ const UsersManagementPage = () => {
       </div>
 
       {/* Pagination */}
-      <div className="mt-6 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-xl shadow-xl p-4 border border-slate-600">
+      <div className="mt-4 bg-white rounded-xl shadow-sm p-2 border border-gray-200">
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -426,7 +437,7 @@ const UsersManagementPage = () => {
                 </h3>
                 <p className="text-sm text-gray-600">User: {selectedUser.fullName} (@{selectedUser.username})</p>
               </div>
-              <button onClick={() => { setShowRoleModal(false); setSelectedUser(null); setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setTourisms([]); setHotels([]); }} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowRoleModal(false); setSelectedUser(null); setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setTourisms([]); setHotels([]); setTourismSearch(''); setShowTourismDrop(false); }} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -466,16 +477,16 @@ const UsersManagementPage = () => {
                 // Step 2: For HOTEL_OWNER, select tourism place first, then hotel
                 <div className="space-y-4">
                   <button 
-                    onClick={() => { setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setHotels([]); }} 
+                    onClick={() => { setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setHotels([]); setTourismSearch(''); setShowTourismDrop(false); }} 
                     className="text-gray-500 hover:text-gray-700 text-sm flex items-center gap-1"
                   >
                     ← Back to role selection
                   </button>
                   
                   {/* Step 2a: Select Tourism Place */}
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <h4 className="text-emerald-700 font-medium mb-2">📍 Step 1: Select Tourism Place</h4>
-                    <p className="text-emerald-600 text-sm mb-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-blue-700 font-medium mb-2">Step 1: Select Tourism Place</h4>
+                    <p className="text-blue-600 text-sm mb-3">
                       First, select the tourism destination where the hotel is located.
                     </p>
                     
@@ -485,28 +496,55 @@ const UsersManagementPage = () => {
                       </div>
                     ) : tourisms.length === 0 ? (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                        <p className="text-yellow-700 text-sm">⚠️ No tourism places found.</p>
+                        <p className="text-yellow-700 text-sm">No tourism places found.</p>
                       </div>
                     ) : (
-                      <select
-                        value={selectedTourismId}
-                        onChange={(e) => handleTourismSelect(e.target.value ? Number(e.target.value) : '')}
-                        className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500"
-                      >
-                        <option value="">-- Select a tourism place --</option>
-                        {tourisms.map((tourism) => (
-                          <option key={tourism.id} value={tourism.id}>
-                            {tourism.name} ({tourism.wereda})
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative tourism-search-drop">
+                        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                          type="text"
+                          placeholder="Filter tourism place by name..."
+                          value={tourismSearch}
+                          onChange={(e) => { setTourismSearch(e.target.value); setShowTourismDrop(true); }}
+                          onFocus={() => setShowTourismDrop(true)}
+                          className="w-full bg-gray-50 border-0 text-gray-900 rounded-lg pl-8 pr-4 py-2 focus:ring-1 focus:ring-gray-200 focus:outline-none text-sm"
+                        />
+                        {/* Scrollable dropdown */}
+                        {showTourismDrop && (
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {tourisms
+                              .filter(t => t.name?.toLowerCase().includes(tourismSearch.toLowerCase()) || t.wereda?.toLowerCase().includes(tourismSearch.toLowerCase()))
+                              .length === 0 ? (
+                              <div className="px-4 py-2 text-sm text-gray-500">No results found</div>
+                            ) : (
+                              tourisms
+                                .filter(t => t.name?.toLowerCase().includes(tourismSearch.toLowerCase()) || t.wereda?.toLowerCase().includes(tourismSearch.toLowerCase()))
+                                .map((t) => (
+                                  <div
+                                    key={t.id}
+                                    onClick={() => {
+                                      handleTourismSelect(t.id);
+                                      setTourismSearch(`${t.name} (${t.wereda})`);
+                                      setShowTourismDrop(false);
+                                    }}
+                                    className={`px-4 py-2 text-sm cursor-pointer hover:bg-blue-50 ${selectedTourismId === t.id ? 'bg-blue-100 font-semibold text-blue-800' : 'text-gray-800'}`}
+                                  >
+                                    {t.name} <span className="text-gray-500 text-xs">({t.wereda})</span>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   
                   {/* Step 2b: Select Hotel (only shown after tourism place is selected) */}
                   {selectedTourismId && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h4 className="text-blue-700 font-medium mb-2">🏨 Step 2: Select Hotel to Manage</h4>
+                      <h4 className="text-blue-700 font-medium mb-2">Step 2: Select Hotel to Manage</h4>
                       <p className="text-blue-600 text-sm mb-3">
                         Choose which hotel in <strong>{tourisms.find(t => t.id === selectedTourismId)?.name}</strong> this user will own and manage.
                       </p>
@@ -517,7 +555,7 @@ const UsersManagementPage = () => {
                         </div>
                       ) : hotels.length === 0 ? (
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-yellow-700 text-sm">⚠️ No hotels found in this location.</p>
+                          <p className="text-yellow-700 text-sm">No hotels found in this location.</p>
                           <p className="text-yellow-600 text-xs mt-1">You can still grant the role and assign a hotel later from the Hotels page.</p>
                         </div>
                       ) : (
@@ -525,7 +563,7 @@ const UsersManagementPage = () => {
                           <select
                             value={selectedHotelId}
                             onChange={(e) => setSelectedHotelId(e.target.value ? Number(e.target.value) : '')}
-                            className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"
+                            className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-1 focus:ring-blue-400 focus:border-blue-400"
                           >
                             <option value="">-- Select a hotel (optional) --</option>
                             {hotels.map((hotel) => (
@@ -537,7 +575,7 @@ const UsersManagementPage = () => {
                           </select>
                           {selectedHotelId && hotels.find(h => h.id === selectedHotelId)?.ownerId && (
                             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
-                              <p className="text-orange-700 text-sm">⚠️ This hotel already has an owner.</p>
+                              <p className="text-orange-700 text-sm">This hotel already has an owner.</p>
                               <p className="text-orange-600 text-xs mt-1">Assigning this hotel will transfer ownership from the current owner.</p>
                             </div>
                           )}
@@ -547,7 +585,7 @@ const UsersManagementPage = () => {
                   )}
                   
                   <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
-                    <FormButton variant="secondary" onClick={() => { setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setHotels([]); }}>
+                    <FormButton variant="secondary" onClick={() => { setSelectedRole(null); setSelectedTourismId(''); setSelectedHotelId(''); setHotels([]); setTourismSearch(''); setShowTourismDrop(false); }}>
                       Back
                     </FormButton>
                     <FormButton 

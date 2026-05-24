@@ -5,6 +5,9 @@ import { AdminRoadService, AdminTourismService, Road, RoadCreateDto, RoadUpdateD
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useRouter } from 'next/navigation';
 import FormInput, { FormButton, Alert } from '@/components/common/FormInput';
+import { useToast } from '@/components/common/Toast';
+import { useConfirm } from '@/components/common/ConfirmDialog';
+import TopBar from '@/components/layout/TopBar';
 import { ValidationErrors } from '@/utils/validation';
 import {
   validatePlaceName,
@@ -18,17 +21,20 @@ import {
 const ROAD_TYPES = [
   { value: 'CAR', label: '🚗 Car Route', icon: '🚗' },
   { value: 'FOOT', label: '🚶 Walking Route', icon: '🚶' },
-  { value: 'HORSE', label: '🐎 Horse Route', icon: '🐎' },
-  { value: 'PLANE', label: '✈️ Air Route', icon: '✈️' }
+  { value: 'HORSE', label: '🐎 Horse Route', icon: '🐎' }
 ];
 
 const RoadsManagementPage = () => {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [roads, setRoads] = useState<Road[]>([]);
   const [tourisms, setTourisms] = useState<Tourism[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTourismId, setSelectedTourismId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [tourismSearch, setTourismSearch] = useState('');
+  const [showTourismDrop, setShowTourismDrop] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingRoad, setEditingRoad] = useState<Road | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -36,7 +42,7 @@ const RoadsManagementPage = () => {
   const [formSuccess, setFormSuccess] = useState('');
   const [formError, setFormError] = useState('');
   const [formData, setFormData] = useState<RoadCreateDto>({
-    tourismPlaceId: 0,
+    tourismPlaceId: selectedTourismId || 0,
     initialPlace: '',
     roadType: 'CAR',
     description: '',
@@ -59,6 +65,12 @@ const RoadsManagementPage = () => {
   }, [isAuthenticated, role]);
 
   useEffect(() => {
+    const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.tourism-drop-roads')) setShowTourismDrop(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  useEffect(() => {
     if (selectedTourismId) {
       loadRoads(selectedTourismId);
     }
@@ -68,9 +80,10 @@ const RoadsManagementPage = () => {
     if (!token) return;
     try {
       const response = await AdminTourismService.getAllTourism(token, 0, 100);
-      setTourisms(response.content || []);
-      if (response.content && response.content.length > 0) {
-        setSelectedTourismId(response.content[0].id);
+      const sorted = (response.content || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      setTourisms(sorted);
+      if (sorted.length > 0) {
+        setSelectedTourismId(sorted[0].id);
       }
     } catch (err) {
       console.error('Failed to load tourisms:', err);
@@ -98,14 +111,9 @@ const RoadsManagementPage = () => {
   const validateFormData = (): boolean => {
     const errors: ValidationResult = {};
     
-    // Validate initial place
-    const placeResult = validatePlaceName(formData.initialPlace);
-    if (!placeResult.valid) errors.initialPlace = placeResult.error;
-    
-    // Validate road type
-    if (!formData.roadType) {
-      errors.roadType = 'Road type is required';
-    }
+    // Validate initialPlace
+    const nameResult = validatePlaceName(formData.initialPlace);
+    if (!nameResult.valid) errors.initialPlace = nameResult.error;
     
     // Validate distances (optional but must be valid if provided)
     if (formData.distanceByCar !== undefined && formData.distanceByCar !== null) {
@@ -116,13 +124,13 @@ const RoadsManagementPage = () => {
       const distResult = validateDistance(formData.distanceByFoot, 'Distance by foot');
       if (!distResult.valid) errors.distanceByFoot = distResult.error;
     }
-    if (formData.distanceByHorse !== undefined && formData.distanceByHorse !== null) {
-      const distResult = validateDistance(formData.distanceByHorse, 'Distance by horse');
-      if (!distResult.valid) errors.distanceByHorse = distResult.error;
-    }
     if (formData.distanceByPlane !== undefined && formData.distanceByPlane !== null) {
       const distResult = validateDistance(formData.distanceByPlane, 'Distance by plane');
       if (!distResult.valid) errors.distanceByPlane = distResult.error;
+    }
+    if (formData.distanceByHorse !== undefined && formData.distanceByHorse !== null) {
+      const distResult = validateDistance(formData.distanceByHorse, 'Distance by horse');
+      if (!distResult.valid) errors.distanceByHorse = distResult.error;
     }
     if (formData.totalDistance !== undefined && formData.totalDistance !== null) {
       const distResult = validateDistance(formData.totalDistance, 'Total distance');
@@ -131,18 +139,22 @@ const RoadsManagementPage = () => {
     
     setFormErrors(errors as ValidationErrors);
     return !hasValidationErrors(errors);
-  };
+  }
 
   const handleCreate = async () => {
-    if (!token || !selectedTourismId) return;
+    if (!token) return;
     setFormError('');
     if (!validateFormData()) return;
     
     try {
       setActionLoading(-1);
-      await AdminRoadService.createRoad(token, { ...formData, tourismPlaceId: selectedTourismId });
+      const dataToSend = { ...formData };
+      if (selectedTourismId) {
+        dataToSend.tourismPlaceId = selectedTourismId;
+      }
+      await AdminRoadService.createRoad(token, dataToSend);
       setFormSuccess('Road created successfully!');
-      await loadRoads(selectedTourismId);
+      await loadRoads(selectedTourismId ?? 0);
       setTimeout(() => {
         setShowModal(false);
         resetForm();
@@ -155,7 +167,7 @@ const RoadsManagementPage = () => {
   };
 
   const handleUpdate = async () => {
-    if (!token || !editingRoad || !selectedTourismId) return;
+    if (!token || !editingRoad) return;
     setFormError('');
     if (!validateFormData()) return;
     
@@ -173,7 +185,7 @@ const RoadsManagementPage = () => {
       };
       await AdminRoadService.updateRoad(token, editingRoad.id, updateData);
       setFormSuccess('Road updated successfully!');
-      await loadRoads(selectedTourismId);
+      await loadRoads(selectedTourismId ?? 0);
       setTimeout(() => {
         setShowModal(false);
         setEditingRoad(null);
@@ -188,13 +200,38 @@ const RoadsManagementPage = () => {
 
   const handleDelete = async (roadId: number) => {
     if (!token || !selectedTourismId) return;
-    if (!confirm('Are you sure you want to delete this road?')) return;
+    const ok = await confirm({ message: 'Are you sure you want to delete this road?', variant: 'danger', title: 'Delete Road', confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!ok) return;
     try {
       setActionLoading(roadId);
       await AdminRoadService.deleteRoad(token, roadId);
+      toast.success('Road deleted successfully');
       await loadRoads(selectedTourismId);
     } catch (err) {
-      alert('Failed to delete: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleActive = async (roadId: number, currentStatus: boolean) => {
+    if (!token || !selectedTourismId) return;
+    const action = currentStatus ? 'deactivate' : 'activate';
+    const ok = await confirm({ 
+      message: `Are you sure you want to ${action} this road? ${currentStatus ? 'The road will not be visible to clients.' : 'The road will be visible to clients.'}`, 
+      variant: currentStatus ? 'warning' : 'info', 
+      title: `${action.charAt(0).toUpperCase() + action.slice(1)} Road`, 
+      confirmLabel: 'Yes', 
+      cancelLabel: 'No' 
+    });
+    if (!ok) return;
+    try {
+      setActionLoading(roadId);
+      await AdminRoadService.toggleRoadActive(token, roadId);
+      toast.success(`Road ${action}d successfully`);
+      await loadRoads(selectedTourismId);
+    } catch (err) {
+      toast.error(`Failed to ${action}: ` + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setActionLoading(null);
     }
@@ -258,14 +295,8 @@ const RoadsManagementPage = () => {
     }
   };
 
-  const getRoadTypeIcon = (type: string) => {
-    const found = ROAD_TYPES.find(rt => rt.value === type);
-    return found ? found.icon : '🛣️';
-  };
-
   const filteredRoads = roads.filter(road =>
     road.initialPlace?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    road.roadType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     road.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -279,61 +310,63 @@ const RoadsManagementPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 admin-page">
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
-          <button onClick={() => router.push('/admin')}
-            className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span className="font-bold">Back to Dashboard</span>
-          </button>
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-black text-white mb-2">🛣️ Roads Management</h1>
-              <p className="text-blue-200 font-semibold">Manage travel routes and pathways for tourism places</p>
-            </div>
+    <div className="min-h-screen bg-white admin-page">
+      <TopBar 
+        showCategories={false} 
+        showBackButton={false} 
+        pageTitle="Roads Management" 
+        showAdminMenu={true}
+        keyword={searchTerm}
+        onSearch={(value) => setSearchTerm(value)}
+        liveSearch={true}
+        actionButtons={
+          <div className="flex items-center flex-1 justify-end">
             <button onClick={() => { resetForm(); setShowModal(true); }} disabled={!selectedTourismId}
-              className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-2 transition-colors font-black shadow-lg">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Road
+              style={{ fontSize: '14px' }}
+              className="text-gray-900 font-black hover:text-black transition-all whitespace-nowrap px-1 disabled:opacity-40">
+              + Add Road
             </button>
           </div>
-        </div>
+        }
+      />
+      
+      <div className="container mx-auto px-4 pt-4 pb-8">
 
-        {/* Tourism Selector */}
-        <div className="bg-orange-100 rounded-xl shadow-xl p-6 mb-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex-1 max-w-md">
-              <label className="block text-sm font-black text-gray-900 mb-1">Select Tourism Place</label>
-              <select value={selectedTourismId || ''} onChange={(e) => setSelectedTourismId(e.target.value ? parseInt(e.target.value) : null)}
-                className="w-full bg-white border-2 border-orange-300 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-bold shadow-sm">
-                <option value="">-- Select a tourism place --</option>
-                {tourisms.map(tourism => (
-                  <option key={tourism.id} value={tourism.id}>{tourism.name} ({tourism.wereda})</option>
+        {/* Tourism Selector - searchable */}
+        <div className="mb-6 flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Select Tourism Place:</label>
+          <div className="relative flex-1 max-w-sm tourism-drop-roads">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Filter tourism places..."
+              value={tourismSearch}
+              onChange={(e) => setTourismSearch(e.target.value)}
+              onFocus={() => setShowTourismDrop(true)}
+              className="w-full border-0 bg-gray-50 text-gray-900 rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-200 text-sm"
+            />
+            {showTourismDrop && (
+              <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                {tourisms.filter(t => t.name?.toLowerCase().includes(tourismSearch.toLowerCase()) || t.wereda?.toLowerCase().includes(tourismSearch.toLowerCase())).length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-500">No results</div>
+                ) : tourisms.filter(t => t.name?.toLowerCase().includes(tourismSearch.toLowerCase()) || t.wereda?.toLowerCase().includes(tourismSearch.toLowerCase())).map(t => (
+                  <div key={t.id} onClick={() => { setSelectedTourismId(t.id); setTourismSearch(t.name); setShowTourismDrop(false); }}
+                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${selectedTourismId === t.id ? 'bg-blue-100 font-semibold' : ''}`}>
+                    {t.name} ({t.wereda})
+                  </div>
                 ))}
-              </select>
-            </div>
-            <div className="relative flex-1 max-w-md">
-              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input type="text" placeholder="Search roads..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border-2 border-orange-300 text-gray-900 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 font-bold shadow-sm" />
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Roads Table */}
-        <div className="bg-orange-100 rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-white rounded-xl overflow-hidden">
           {!selectedTourismId ? (
             <div className="p-8 text-center text-gray-800 font-bold bg-white">
-              <span className="text-5xl mb-4 block">🏞️</span>
-              <p className="text-lg font-black">Please select a tourism place to view its roads</p>
+              <p className="text-lg font-black">Please select a tourism place to view roads or to add a road/route</p>
             </div>
           ) : loading ? (
             <div className="p-8 text-center bg-white">
@@ -343,35 +376,32 @@ const RoadsManagementPage = () => {
           ) : error ? (
             <div className="p-8 text-center bg-white">
               <Alert type="error" message={error} />
-              <button onClick={() => selectedTourismId && loadRoads(selectedTourismId)} className="mt-4 bg-orange-200 text-orange-800 px-4 py-2 rounded-lg hover:bg-orange-300 font-black shadow-md">Retry</button>
+              <button onClick={() => selectedTourismId && loadRoads(selectedTourismId)} className="mt-4 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 font-bold border border-gray-300">Retry</button>
             </div>
           ) : filteredRoads.length === 0 ? (
             <div className="p-8 text-center text-gray-800 bg-white">
-              <span className="text-5xl mb-4 block">🛣️</span>
-              <p className="text-lg mb-4 font-black">No roads found for {getSelectedTourismName()}</p>
-              <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-orange-200 text-orange-800 px-4 py-2 rounded-lg hover:bg-orange-300 font-black shadow-md">Add First Road</button>
+              <p className="text-lg font-black text-gray-500">No roads found for {getSelectedTourismName()}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-orange-200">
-                <thead className="bg-orange-200">
+              <table className="min-w-full">
+                <thead className="bg-gray-100">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-black text-orange-900 uppercase tracking-wider">Road Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-black text-orange-900 uppercase tracking-wider">Initial Place</th>
-                    <th className="px-6 py-3 text-left text-xs font-black text-orange-900 uppercase tracking-wider">Distances</th>
-                    <th className="px-6 py-3 text-left text-xs font-black text-orange-900 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-black text-orange-900 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Initial Place</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Distances</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-orange-100 bg-white">
+                <tbody className="bg-white">
                   {filteredRoads.map((road) => (
-                    <tr key={road.id} className="hover:bg-orange-50 transition-colors">
+                    <tr key={road.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <span className="text-2xl mr-3">{getRoadTypeIcon(road.roadType)}</span>
                           <div>
-                            <div className="text-sm font-black text-gray-900">{road.roadType}</div>
-                            <div className="text-xs text-orange-700 font-bold">ID: {road.id}</div>
+                            <div className="text-sm font-black text-gray-900">Road #{road.id}</div>
                           </div>
                         </div>
                       </td>
@@ -385,23 +415,39 @@ const RoadsManagementPage = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1">
-                          {road.distanceByCar && <span className="px-2 py-1 text-xs bg-blue-200 text-blue-800 rounded font-black shadow-sm">🚗 {road.distanceByCar}km</span>}
-                          {road.distanceByFoot && <span className="px-2 py-1 text-xs bg-green-200 text-green-800 rounded font-black shadow-sm">🚶 {road.distanceByFoot}km</span>}
-                          {road.distanceByHorse && <span className="px-2 py-1 text-xs bg-purple-200 text-purple-800 rounded font-black shadow-sm">🐎 {road.distanceByHorse}km</span>}
-                          {road.distanceByPlane && <span className="px-2 py-1 text-xs bg-orange-200 text-orange-800 rounded font-black shadow-sm">✈️ {road.distanceByPlane}km</span>}
-                          {road.totalDistance && <span className="px-2 py-1 text-xs bg-gray-200 text-gray-800 rounded font-black shadow-sm">Total: {road.totalDistance}km</span>}
+                          {road.distanceByCar && <span className="px-2 py-1 text-xs bg-gray-50 text-gray-900 rounded font-bold">By Car: {road.distanceByCar}km</span>}
+                          {road.distanceByFoot && <span className="px-2 py-1 text-xs bg-gray-50 text-gray-900 rounded font-bold">By Foot: {road.distanceByFoot}km</span>}
+                          {road.distanceByHorse && <span className="px-2 py-1 text-xs bg-gray-50 text-gray-900 rounded font-bold">By Horse: {road.distanceByHorse}km</span>}
+                          {road.distanceByPlane && <span className="px-2 py-1 text-xs bg-gray-50 text-gray-900 rounded font-bold">By Plane: {road.distanceByPlane}km</span>}
+                          {road.totalDistance && <span className="px-2 py-1 text-xs bg-gray-50 text-gray-900 rounded font-bold">Total: {road.totalDistance}km</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-sm text-gray-800 font-bold line-clamp-2 max-w-xs">{road.description || 'No description'}</p>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full border ${road.active !== false ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                          {road.active !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-3">
-                          <button onClick={() => openEditModal(road)} className="bg-blue-200 text-blue-800 px-3 py-1 rounded-lg font-black hover:bg-blue-300 shadow-md">Edit</button>
+                          <button onClick={() => openEditModal(road)} className="text-blue-600 hover:text-blue-800 px-3 py-1 rounded-lg font-black transition-colors">Edit</button>
                           <button onClick={() => handleDelete(road.id)} disabled={actionLoading === road.id}
-                            className="bg-red-200 text-red-800 px-3 py-1 rounded-lg font-black hover:bg-red-300 shadow-md disabled:opacity-50">
+                            className="text-red-600 hover:text-red-800 px-3 py-1 rounded-lg font-black transition-colors disabled:opacity-50">
                             {actionLoading === road.id ? '...' : 'Delete'}
                           </button>
+                          {road.active !== false ? (
+                            <button onClick={() => handleToggleActive(road.id, road.active !== false)} disabled={actionLoading === road.id}
+                              className="text-orange-600 hover:text-orange-800 px-3 py-1 rounded-lg font-black transition-colors disabled:opacity-50">
+                              {actionLoading === road.id ? '...' : 'Deactivate'}
+                            </button>
+                          ) : (
+                            <button onClick={() => handleToggleActive(road.id, road.active !== false)} disabled={actionLoading === road.id}
+                              className="text-green-600 hover:text-green-800 px-3 py-1 rounded-lg font-black transition-colors disabled:opacity-50">
+                              {actionLoading === road.id ? '...' : 'Activate'}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -413,37 +459,22 @@ const RoadsManagementPage = () => {
         </div>
 
         {/* Create/Edit Modal */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-300">
-              <div className="sticky top-0 bg-gray-100 border-b-2 border-gray-300 px-6 py-4 flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-black text-gray-900">
-                    {editingRoad ? '✏️ Edit Road' : '➕ Add New Road'}
-                  </h3>
-                  <p className="text-sm text-gray-600 font-bold mt-1">Tourism Place: {getSelectedTourismName()}</p>
-                </div>
-                <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-500 hover:text-gray-700 font-bold">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="p-6 space-y-4">
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+            <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-3 flex justify-between items-center z-10">
+              <h3 className="text-xl font-black text-gray-900">
+                {editingRoad ? 'Edit Road' : 'Add New Road'}
+              </h3>
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-500 hover:text-gray-700 font-bold">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+              <div className="p-4 space-y-3">
                 {formSuccess && <Alert type="success" message={formSuccess} />}
                 {formError && <Alert type="error" message={formError} onClose={() => setFormError('')} />}
-
-                <div>
-                  <label className="block text-sm font-black text-gray-800 mb-1">Road Type *</label>
-                  <select name="roadType" value={formData.roadType} onChange={handleInputChange}
-                    className="w-full bg-white border-2 border-gray-400 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-bold">
-                    {ROAD_TYPES.map(type => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
-                  {formErrors.roadType && <p className="mt-1 text-sm text-red-600 font-bold">{formErrors.roadType}</p>}
-                </div>
 
                 <FormInput label="Initial Place" name="initialPlace" value={formData.initialPlace} onChange={handleInputChange}
                   error={formErrors.initialPlace} placeholder="Starting location (e.g., Addis Ababa)" required
@@ -452,7 +483,7 @@ const RoadsManagementPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-black text-gray-800 mb-1">🚗 Distance by Car (km)</label>
+                    <label className="block text-sm font-black text-gray-800 mb-1">Distance by Car (km)</label>
                     <input 
                       type="text"
                       inputMode="decimal"
@@ -460,12 +491,12 @@ const RoadsManagementPage = () => {
                       onChange={(e) => handleDistanceChange('distanceByCar', e.target.value)}
                       onKeyDown={(e) => handleNumericKeyDown(e, true)}
                       placeholder="0" 
-                      className={`w-full bg-white border-2 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold ${formErrors.distanceByCar ? 'border-red-500 bg-red-50' : 'border-gray-400'}`} 
+                      className={`w-full bg-white border text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 ${formErrors.distanceByCar ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
                     />
                     {formErrors.distanceByCar && <p className="text-red-500 text-xs mt-1 font-bold">{formErrors.distanceByCar}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-black text-gray-800 mb-1">🚶 Distance by Foot (km)</label>
+                    <label className="block text-sm font-black text-gray-800 mb-1">Distance by Foot (km)</label>
                     <input 
                       type="text"
                       inputMode="decimal"
@@ -473,7 +504,7 @@ const RoadsManagementPage = () => {
                       onChange={(e) => handleDistanceChange('distanceByFoot', e.target.value)}
                       onKeyDown={(e) => handleNumericKeyDown(e, true)}
                       placeholder="0" 
-                      className={`w-full bg-white border-2 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold ${formErrors.distanceByFoot ? 'border-red-500 bg-red-50' : 'border-gray-400'}`} 
+                      className={`w-full bg-white border text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 ${formErrors.distanceByFoot ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
                     />
                     {formErrors.distanceByFoot && <p className="text-red-500 text-xs mt-1 font-bold">{formErrors.distanceByFoot}</p>}
                   </div>
@@ -481,7 +512,7 @@ const RoadsManagementPage = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-black text-gray-800 mb-1">🐎 Distance by Horse (km)</label>
+                    <label className="block text-sm font-black text-gray-800 mb-1">Distance by Horse (km)</label>
                     <input 
                       type="text"
                       inputMode="decimal"
@@ -489,12 +520,12 @@ const RoadsManagementPage = () => {
                       onChange={(e) => handleDistanceChange('distanceByHorse', e.target.value)}
                       onKeyDown={(e) => handleNumericKeyDown(e, true)}
                       placeholder="0" 
-                      className={`w-full bg-white border-2 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold ${formErrors.distanceByHorse ? 'border-red-500 bg-red-50' : 'border-gray-400'}`} 
+                      className={`w-full bg-white border text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 ${formErrors.distanceByHorse ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
                     />
                     {formErrors.distanceByHorse && <p className="text-red-500 text-xs mt-1 font-bold">{formErrors.distanceByHorse}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-black text-gray-800 mb-1">✈️ Distance by Plane (km)</label>
+                    <label className="block text-sm font-black text-gray-800 mb-1">Distance by Plane (km)</label>
                     <input 
                       type="text"
                       inputMode="decimal"
@@ -502,7 +533,7 @@ const RoadsManagementPage = () => {
                       onChange={(e) => handleDistanceChange('distanceByPlane', e.target.value)}
                       onKeyDown={(e) => handleNumericKeyDown(e, true)}
                       placeholder="0" 
-                      className={`w-full bg-white border-2 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold ${formErrors.distanceByPlane ? 'border-red-500 bg-red-50' : 'border-gray-400'}`} 
+                      className={`w-full bg-white border text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 ${formErrors.distanceByPlane ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
                     />
                     {formErrors.distanceByPlane && <p className="text-red-500 text-xs mt-1 font-bold">{formErrors.distanceByPlane}</p>}
                   </div>
@@ -517,7 +548,7 @@ const RoadsManagementPage = () => {
                     onChange={(e) => handleDistanceChange('totalDistance', e.target.value)}
                     onKeyDown={(e) => handleNumericKeyDown(e, true)}
                     placeholder="0" 
-                    className={`w-full bg-white border-2 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold ${formErrors.totalDistance ? 'border-red-500 bg-red-50' : 'border-gray-400'}`} 
+                    className={`w-full bg-white border text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 ${formErrors.totalDistance ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
                   />
                   {formErrors.totalDistance && <p className="text-red-500 text-xs mt-1 font-bold">{formErrors.totalDistance}</p>}
                 </div>
@@ -526,20 +557,28 @@ const RoadsManagementPage = () => {
                   <label className="block text-sm font-black text-gray-800 mb-1">Description</label>
                   <textarea name="description" value={formData.description || ''} onChange={handleInputChange}
                     placeholder="Road conditions, landmarks, etc." rows={3}
-                    className="w-full bg-white border-2 border-gray-400 text-gray-900 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 font-semibold" />
+                    className="w-full bg-white border border-gray-300 text-gray-900 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400" />
                 </div>
               </div>
 
-              <div className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex justify-end space-x-3">
-                <FormButton variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>Cancel</FormButton>
-                <FormButton variant="primary" onClick={editingRoad ? handleUpdate : handleCreate}
-                  loading={actionLoading !== null} disabled={actionLoading !== null}>
-                  {editingRoad ? 'Update Road' : 'Create Road'}
-                </FormButton>
-              </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 py-2.5 flex justify-end space-x-2 z-10">
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-semibold text-sm transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingRoad ? handleUpdate : handleCreate}
+                disabled={actionLoading !== null}
+                className="px-3 py-1.5 bg-white text-gray-900 rounded hover:bg-gray-50 disabled:opacity-50 font-semibold text-sm transition-all border border-gray-300"
+              >
+                {actionLoading !== null ? 'Saving...' : editingRoad ? 'Update' : 'Create'}
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
       </div>
     </div>
   );

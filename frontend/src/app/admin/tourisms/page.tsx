@@ -7,6 +7,12 @@ import { useRouter } from 'next/navigation';
 import FormInput, { FormButton, Alert } from '@/components/common/FormInput';
 import Pagination from '@/components/common/Pagination';
 import { ValidationErrors } from '@/utils/validation';
+import { useToast } from '@/components/common/Toast';
+import { useConfirm } from '@/components/common/ConfirmDialog';
+import TopBar from '@/components/layout/TopBar';
+import ImageUpload from '@/components/common/ImageUpload';
+import { AdminImageUploadService } from '../../../services/admin.service';
+import { getImageUrl } from '@/utils/imageUrl';
 import {
   validatePlaceName,
   validateDescription,
@@ -15,13 +21,15 @@ import {
 } from '../../../utils/ethiopianValidation';
 
 const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: '✅ Active' },
-  { value: 'BLOCKED', label: '🚫 Blocked' }
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'BLOCKED', label: 'Blocked' }
 ];
 
 const PAGE_SIZE_OPTIONS = [9, 12, 15, 20, 30];
 
 const TourismsManagementPage = () => {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [tourisms, setTourisms] = useState<Tourism[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +37,8 @@ const TourismsManagementPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showModal, setShowModal] = useState(false);
   const [editingTourism, setEditingTourism] = useState<Tourism | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -36,12 +46,12 @@ const TourismsManagementPage = () => {
   const [formErrors, setFormErrors] = useState<ValidationErrors>({});
   const [formSuccess, setFormSuccess] = useState('');
   const [formError, setFormError] = useState('');
-  const [formData, setFormData] = useState<TourismCreateDto>({
-    name: '', description: '', wereda: '', kebele: '', category: '',
-    bestTime: '', peaceInfo: '', visitTime: '', languages: [], images: [],
+  const [languagesRaw, setLanguagesRaw] = useState('');
+  const [formData, setFormData] = useState<any>({
+    name: '', description: '', wereda: '', kebele: '', categories: [],
+    bestTime: '', peaceInfo: '', visitTime: '', languages: [],
     imageUrl: '', status: 'ACTIVE'
   });
-  const [newImageUrl, setNewImageUrl] = useState('');
 
   const { token, role, isAuthenticated } = useAuthStore();
   const router = useRouter();
@@ -59,11 +69,15 @@ const TourismsManagementPage = () => {
     try {
       setLoading(true);
       setError(null);
+      console.log('Loading tourisms with page:', currentPage, 'size:', pageSize);
       const response = await AdminTourismService.getAllTourism(token, currentPage, pageSize);
+      console.log('Response received:', response);
       setTourisms(response.content || []);
       setTotalPages(response.totalPages || 0);
       setTotalElements(response.totalElements || 0);
+      console.log('Set tourisms:', response.content?.length, 'Total pages:', response.totalPages);
     } catch (err) {
+      console.error('Error loading tourisms:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tourism places');
     } finally {
       setLoading(false);
@@ -88,15 +102,15 @@ const TourismsManagementPage = () => {
     
     // Validate wereda
     const weredaResult = validatePlaceName(formData.wereda);
-    if (!weredaResult.valid) errors.wereda = weredaResult.error?.replace('Place name', 'Wereda');
+    if (!weredaResult.valid) errors.wereda = weredaResult.error?.replace('Place name', 'Wereda') ?? null;
     
     // Validate kebele
     const kebeleResult = validatePlaceName(formData.kebele);
-    if (!kebeleResult.valid) errors.kebele = kebeleResult.error?.replace('Place name', 'Kebele');
+    if (!kebeleResult.valid) errors.kebele = kebeleResult.error?.replace('Place name', 'Kebele') ?? null;
     
     // Validate category
-    if (!formData.category) {
-      errors.category = 'Category is required';
+    if (!formData.categories || formData.categories.length === 0) {
+      errors.categories = 'At least one category is required';
     }
     
     setFormErrors(errors as ValidationErrors);
@@ -110,7 +124,25 @@ const TourismsManagementPage = () => {
     
     try {
       setActionLoading(-1);
-      await AdminTourismService.createTourism(token, formData);
+
+      // Strip blob: imageUrl before sending — it will be uploaded separately
+      const { imageUrl: _imgUrl, ...coreData } = formData as any;
+      const result = await AdminTourismService.createTourism(token, coreData);
+
+      // result is the new tourism ID (number) or the full object
+      const newId = typeof result === 'number' ? result : (result as any)?.id;
+
+      // Upload pending main image if any
+      const pendingMain = (window as any).__pendingTourismMainImage as File | undefined;
+      if (pendingMain && newId) {
+        try {
+          await AdminImageUploadService.uploadTourismMainImage(token, newId, pendingMain);
+        } catch (imgErr) {
+          console.warn('Tourism main image upload failed:', imgErr);
+        }
+        delete (window as any).__pendingTourismMainImage;
+      }
+
       setFormSuccess('Tourism place created successfully!');
       await loadTourisms();
       setTimeout(() => {
@@ -131,9 +163,9 @@ const TourismsManagementPage = () => {
     
     try {
       setActionLoading(editingTourism.id);
-      const updateData: TourismUpdateDto = {
+      const updateData: any = {
         name: formData.name, description: formData.description,
-        wereda: formData.wereda, kebele: formData.kebele, category: formData.category,
+        wereda: formData.wereda, kebele: formData.kebele, categories: formData.categories,
         bestTime: formData.bestTime, peaceInfo: formData.peaceInfo, visitTime: formData.visitTime,
         languages: formData.languages, imageUrl: (formData as any).imageUrl, status: (formData as any).status
       };
@@ -154,13 +186,15 @@ const TourismsManagementPage = () => {
 
   const handleDelete = async (tourismId: number) => {
     if (!token) return;
-    if (!confirm('Are you sure you want to delete this tourism place?')) return;
+    const ok = await confirm({ message: 'Are you sure you want to delete this tourism place?', variant: 'danger', title: 'Delete Tourism Place', confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!ok) return;
     try {
       setActionLoading(tourismId);
       await AdminTourismService.deleteTourism(token, tourismId);
+      toast.success('Tourism place deleted');
       await loadTourisms();
     } catch (err) {
-      alert('Failed to delete: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setActionLoading(null);
     }
@@ -168,14 +202,15 @@ const TourismsManagementPage = () => {
 
   const openEditModal = (tourism: Tourism) => {
     setEditingTourism(tourism);
+    const langs = tourism.languages || [];
     setFormData({
       name: tourism.name, description: tourism.description,
-      wereda: tourism.wereda, kebele: tourism.kebele, category: tourism.category || '',
+      wereda: tourism.wereda, kebele: tourism.kebele, categories: (tourism as any).categories || [],
       bestTime: tourism.bestTime || '', peaceInfo: tourism.peaceInfo || '',
-      visitTime: tourism.visitTime || '', languages: tourism.languages || [], images: tourism.images || [],
+      visitTime: tourism.visitTime || '', languages: langs,
       imageUrl: (tourism as any).imageUrl || '', status: (tourism as any).status || 'ACTIVE'
     });
-    setNewImageUrl('');
+    setLanguagesRaw(langs.join(', '));
     setFormErrors({});
     setFormError('');
     setFormSuccess('');
@@ -184,11 +219,11 @@ const TourismsManagementPage = () => {
 
   const resetForm = () => {
     setFormData({
-      name: '', description: '', wereda: '', kebele: '', category: '',
-      bestTime: '', peaceInfo: '', visitTime: '', languages: [], images: [],
+      name: '', description: '', wereda: '', kebele: '', categories: [],
+      bestTime: '', peaceInfo: '', visitTime: '', languages: [],
       imageUrl: '', status: 'ACTIVE'
     });
-    setNewImageUrl('');
+    setLanguagesRaw('');
     setEditingTourism(null);
     setFormErrors({});
     setFormError('');
@@ -197,26 +232,51 @@ const TourismsManagementPage = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev: any) => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: '' }));
+      setFormErrors((prev: any) => ({ ...prev, [name]: '' }));
     }
   };
 
   const handleLanguageChange = (lang: string) => {
     const langs = formData.languages || [];
     if (langs.includes(lang)) {
-      setFormData({ ...formData, languages: langs.filter(l => l !== lang) });
+      setFormData({ ...formData, languages: langs.filter((l: any) => l !== lang) });
     } else {
       setFormData({ ...formData, languages: [...langs, lang] });
     }
   };
 
-  const filteredTourisms = tourisms.filter(tourism =>
-    tourism.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tourism.wereda?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tourism.category?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleCategoryChange = (category: string) => {
+    const cats = formData.categories || [];
+    if (cats.includes(category)) {
+      setFormData({ ...formData, categories: cats.filter((c: any) => c !== category) });
+    } else {
+      setFormData({ ...formData, categories: [...cats, category] });
+    }
+  };
+
+  const filteredTourisms = tourisms
+    .filter(tourism =>
+      tourism.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tourism.wereda?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ((tourism as any).categories || []).some((cat: string) => cat.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => {
+      let aVal: any, bVal: any;
+      switch (sortBy) {
+        case 'name': aVal = a.name || ''; bVal = b.name || ''; break;
+        case 'wereda': aVal = a.wereda || ''; bVal = b.wereda || ''; break;
+        case 'category': aVal = ((a as any).categories || []).join(',') || ''; bVal = ((b as any).categories || []).join(',') || ''; break;
+        case 'viewersCount': aVal = a.viewersCount || 0; bVal = b.viewersCount || 0; break;
+        case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
+        default: aVal = a.name || ''; bVal = b.name || '';
+      }
+      if (typeof aVal === 'string') {
+        return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
 
   const LANGUAGES = ['Amharic', 'English', 'Oromo', 'Tigrinya', 'Somali', 'Arabic'];
   const CATEGORIES = [
@@ -233,62 +293,44 @@ const TourismsManagementPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-200 admin-page">
+    <div className="min-h-screen bg-white admin-page">
+      <TopBar 
+        showCategories={false} 
+        showBackButton={false} 
+        pageTitle="Tourism Places" 
+        showAdminMenu={true}
+        keyword={searchTerm}
+        onSearch={(value) => { setSearchTerm(value); setCurrentPage(0); }}
+        liveSearch={true}
+        actionButtons={
+          <div className="flex items-center gap-2 flex-1 justify-end">
+            <button onClick={() => router.push('/admin/hero-images')}
+              style={{ fontSize: '14px' }}
+              className="text-gray-900 font-black hover:text-black transition-all whitespace-nowrap px-1">
+              Hero Images
+            </button>
+            <button onClick={() => { resetForm(); setShowModal(true); }}
+              style={{ fontSize: '14px' }}
+              className="text-gray-900 font-black hover:text-black transition-all whitespace-nowrap px-1">
+              + Add Tourism
+            </button>
+          </div>
+        }
+      />
       
-      <div className="container mx-auto px-4 py-8">
-      <div className="mb-8 bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 p-6 rounded-xl shadow-xl">
-        <button
-          onClick={() => router.push('/admin')}
-          className="flex items-center gap-2 text-blue-200 hover:text-white mb-4 transition-colors font-bold"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          <span className="font-bold">Back to Dashboard</span>
-        </button>
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-black text-white mb-2">🏞️ Tourism Places Management</h1>
-            <p className="text-blue-200 font-semibold">Manage tourism destinations and attractions</p>
-          </div>
-          <button onClick={() => { resetForm(); setShowModal(true); }}
-            className="bg-emerald-500 text-white px-4 py-2 rounded-lg hover:bg-emerald-600 flex items-center gap-2 transition-colors font-bold shadow-lg">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Tourism Place
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="bg-teal-100 rounded-xl shadow-xl p-6 mb-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" placeholder="Search by name, wereda, or category..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border-2 border-teal-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-bold bg-white shadow-sm" />
-          </div>
-          <div className="text-sm text-gray-900 bg-white px-4 py-2 rounded-lg font-bold shadow-md">
-            Total Places: <span className="font-black text-teal-700">{totalElements}</span>
-          </div>
-        </div>
-      </div>
+      <div className="container mx-auto px-4 pt-4 pb-8">
 
       {/* Tourism Grid */}
-      <div className="bg-teal-200 rounded-xl shadow-xl overflow-hidden">
+      <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
         {loading ? (
           <div className="p-8 text-center bg-white">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-800 font-bold">Loading tourism places...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center bg-white">
             <Alert type="error" message={error} />
-            <button onClick={loadTourisms} className="mt-4 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 font-black">Retry</button>
+            <button onClick={loadTourisms} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-black">Retry</button>
           </div>
         ) : filteredTourisms.length === 0 ? (
           <div className="p-8 text-center text-gray-800 font-bold bg-white">
@@ -300,64 +342,75 @@ const TourismsManagementPage = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
             {filteredTourisms.map((tourism) => (
-              <div key={tourism.id} className="rounded-xl overflow-hidden shadow-2xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 group bg-white hover:-translate-y-1">
-                <div className="h-48 bg-teal-100 flex items-center justify-center relative">
+              <div key={tourism.id} className="rounded-xl overflow-hidden hover:shadow-sm transition-all duration-300 group bg-white border border-gray-200">
+                <div className="h-36 bg-gray-100 flex items-center justify-center relative">
                   {tourism.images && tourism.images.length > 0 ? (
-                    <img src={tourism.images[0]} alt={tourism.name} className="w-full h-full object-cover" />
+                    <img src={getImageUrl(typeof tourism.images[0] === 'string' ? tourism.images[0] : (tourism.images[0] as any).imageUrl)} alt={tourism.name} className="w-full h-full object-cover" />
+                  ) : (tourism as any).imageUrl ? (
+                    <img src={getImageUrl((tourism as any).imageUrl)} alt={tourism.name} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-6xl">🏞️</span>
-                  )}
-                  {tourism.category && (
-                    <span className="absolute top-3 right-3 px-3 py-1.5 text-sm bg-teal-600 text-white rounded-full font-black shadow-lg">
-                      {tourism.category}
-                    </span>
+                    <span className="text-4xl text-gray-300">No Image</span>
                   )}
                 </div>
-                <div className="p-4 bg-teal-50 shadow-inner">
+                <div className="p-3 bg-white border-t border-gray-200">
                   {/* Tourism Name */}
-                  <h3 className="text-xl font-black text-gray-900 group-hover:text-teal-700 transition-colors">{tourism.name}</h3>
-                  
+                  <h3 className="text-sm font-black text-gray-900 truncate">{tourism.name}</h3>
+
                   {/* Location */}
-                  <p className="text-sm font-black text-teal-700 mt-2 flex items-center gap-2">
-                    📍 {tourism.wereda}, {tourism.kebele}
+                  <p className="text-xs text-gray-600 mt-0.5 truncate">
+                    {tourism.wereda}, {tourism.kebele}
                   </p>
-                  
-                  {/* Description */}
-                  <p className="text-sm font-bold text-gray-800 mt-3 line-clamp-2">{tourism.description}</p>
-                  
-                  {/* Languages Badges */}
-                  {tourism.languages && tourism.languages.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {tourism.languages.slice(0, 3).map(lang => (
-                        <span key={lang} className="text-xs font-black bg-cyan-200 text-cyan-900 px-2 py-1 rounded-full shadow-sm">{lang}</span>
+
+                  {/* Categories */}
+                  {((tourism as any).categories || []).length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {((tourism as any).categories || []).slice(0, 2).map((cat: string, idx: number) => (
+                        <span key={idx} className="px-1.5 py-0.5 text-xs bg-white text-gray-700 rounded">
+                          {cat}
+                        </span>
                       ))}
-                      {tourism.languages.length > 3 && (
-                        <span className="text-xs font-black bg-cyan-200 text-cyan-900 px-2 py-1 rounded-full shadow-sm">+{tourism.languages.length - 3}</span>
+                      {((tourism as any).categories || []).length > 2 && (
+                        <span className="px-1.5 py-0.5 text-xs bg-white text-gray-600 rounded">
+                          +{((tourism as any).categories || []).length - 2}
+                        </span>
                       )}
                     </div>
                   )}
-                  
-                  {/* Views */}
-                  <div className="mt-3 text-sm font-black text-gray-800 flex items-center gap-1">
-                    👁️ {tourism.viewersCount || 0} views
-                  </div>
-                  
-                  {/* Action Buttons - Stacked vertically for better visibility */}
-                  <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-teal-200">
-                    <button onClick={() => router.push(`/admin/tourisms/${tourism.id}/images`)} 
-                      className="w-full py-2 bg-teal-200 text-teal-800 hover:bg-teal-300 rounded-lg text-sm font-black transition-all shadow-md hover:shadow-lg hover:scale-105">
-                      📸 Images
+
+                  {/* Action Buttons - all inline */}
+                  <div className="mt-2.5 flex gap-1.5 flex-wrap">
+                    <button onClick={() => router.push(`/admin/tourisms/${tourism.id}/images`)}
+                      className="flex-1 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold transition-all border border-gray-200">
+                      Images
                     </button>
-                    <div className="flex gap-2">
-                      <button onClick={() => openEditModal(tourism)} 
-                        className="flex-1 py-2 bg-blue-200 text-blue-800 hover:bg-blue-300 rounded-lg text-sm font-black transition-all shadow-md hover:shadow-lg hover:scale-105">
-                        ✏️ Edit
-                      </button>
-                      <button onClick={() => handleDelete(tourism.id)} disabled={actionLoading === tourism.id}
-                        className="flex-1 py-2 bg-red-200 text-red-800 hover:bg-red-300 rounded-lg text-sm font-black transition-all shadow-md hover:shadow-lg hover:scale-105 disabled:opacity-50">
-                        {actionLoading === tourism.id ? '...' : '🗑️ Delete'}
-                      </button>
-                    </div>
+                    <button onClick={() => openEditModal(tourism)}
+                      className="flex-1 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-xs font-semibold transition-all border border-gray-200">
+                      Edit
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!token) return;
+                        const isActive = (tourism as any).status !== 'BLOCKED';
+                        const action = isActive ? 'block' : 'activate';
+                        const ok = await confirm({ message: `Are you sure you want to ${action} this tourism place?`, variant: isActive ? 'warning' : 'info', title: `${isActive ? 'Block' : 'Activate'} Tourism Place`, confirmLabel: 'Yes', cancelLabel: 'No' });
+                        if (!ok) return;
+                        try {
+                          setActionLoading(tourism.id);
+                          await AdminTourismService.updateTourism(token, tourism.id, { status: isActive ? 'BLOCKED' : 'ACTIVE' } as any);
+                          toast.success(`Tourism place ${isActive ? 'blocked' : 'activated'} successfully`);
+                          await loadTourisms();
+                        } catch (err) {
+                          toast.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                        } finally { setActionLoading(null); }
+                      }}
+                      disabled={actionLoading === tourism.id}
+                      className={`flex-1 py-1.5 rounded text-xs font-semibold transition-all border disabled:opacity-50 ${(tourism as any).status === 'BLOCKED' ? 'bg-green-50 text-green-700 hover:bg-green-100 border-green-200' : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200'}`}>
+                      {actionLoading === tourism.id ? '...' : (tourism as any).status === 'BLOCKED' ? 'Activate' : 'Deactivate'}
+                    </button>
+                    <button onClick={() => handleDelete(tourism.id)} disabled={actionLoading === tourism.id}
+                      className="flex-1 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded text-xs font-semibold transition-all border border-red-200 disabled:opacity-50">
+                      {actionLoading === tourism.id ? '...' : 'Delete'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -367,7 +420,7 @@ const TourismsManagementPage = () => {
       </div>
 
       {/* Pagination */}
-      <div className="mt-6 bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 rounded-xl shadow-xl p-4 border border-slate-600">
+      <div className="mt-6 bg-white rounded-xl shadow-xl p-4 border border-gray-200">
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -382,10 +435,10 @@ const TourismsManagementPage = () => {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-300">
-            <div className="sticky top-0 bg-gray-100 border-b-2 border-gray-300 px-6 py-4 flex justify-between items-center">
+          <div className="bg-white shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto border border-gray-200 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+            <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-4 py-3 flex justify-between items-center z-10">
               <h3 className="text-xl font-black text-gray-900">
-                {editingTourism ? '✏️ Edit Tourism Place' : '➕ Add New Tourism Place'}
+                {editingTourism ? 'Edit Tourism Place' : 'Add New Tourism Place'}
               </h3>
               <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-500 hover:text-gray-700 font-bold">
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -419,41 +472,55 @@ const TourismsManagementPage = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Category" name="category" type="select" value={formData.category}
-                  onChange={handleInputChange} error={formErrors.category} required options={CATEGORIES}
-                />
-                <FormInput label="Best Time to Visit" name="bestTime" value={formData.bestTime || ''}
-                  onChange={handleInputChange} placeholder="e.g., October - March"
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Categories <span className="text-red-500">*</span></label>
+                  <div className="flex flex-wrap gap-2">
+                    {CATEGORIES.map(cat => (
+                      <label key={cat.value} className={`inline-flex items-center px-3 py-1.5 rounded-lg border cursor-pointer transition-all ${
+                        formData.categories?.includes(cat.value) 
+                          ? 'bg-purple-100 border-purple-400 text-purple-800' 
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-purple-50 hover:border-purple-300'
+                      }`}>
+                        <input type="checkbox" checked={formData.categories?.includes(cat.value) || false}
+                          onChange={() => handleCategoryChange(cat.value)} className="sr-only" />
+                        <span className="text-sm font-semibold">{cat.label}</span>
+                        {formData.categories?.includes(cat.value) && (
+                          <svg className="w-4 h-4 ml-1.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  {formErrors.categories && <p className="text-red-500 text-sm font-semibold mt-1">{formErrors.categories}</p>}
+                </div>
+                <FormInput label="Best Time to Visit" name="bestTime" type="textarea" value={formData.bestTime || ''}
+                  onChange={handleInputChange} placeholder="e.g., October - March (Dry season, clear skies)" rows={3}
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormInput label="Visit Duration" name="visitTime" value={formData.visitTime || ''}
-                  onChange={handleInputChange} placeholder="e.g., 2-3 hours"
+                <FormInput label="Visit Duration" name="visitTime" type="textarea" value={formData.visitTime || ''}
+                  onChange={handleInputChange} placeholder="e.g., 2-3 hours, half day, full day" rows={3}
                 />
-                <FormInput label="Peace Info" name="peaceInfo" value={formData.peaceInfo || ''}
-                  onChange={handleInputChange} placeholder="Safety information"
+                <FormInput label="Peace Info" name="peaceInfo" type="textarea" value={formData.peaceInfo || ''}
+                  onChange={handleInputChange} placeholder="Safety information, security details" rows={3}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-800 mb-2">Languages Spoken</label>
-                <div className="flex flex-wrap gap-3">
-                  {LANGUAGES.map(lang => (
-                    <label key={lang} className={`inline-flex items-center px-3 py-2 rounded-lg border-2 cursor-pointer transition-colors font-semibold ${
-                      formData.languages?.includes(lang) ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-gray-50 border-gray-400 hover:bg-gray-100'
-                    }`}>
-                      <input type="checkbox" checked={formData.languages?.includes(lang) || false}
-                        onChange={() => handleLanguageChange(lang)} className="sr-only" />
-                      <span className="text-sm font-semibold">{lang}</span>
-                      {formData.languages?.includes(lang) && (
-                        <svg className="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </label>
-                  ))}
-                </div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Languages Spoken</label>
+                <input
+                  type="text"
+                  value={languagesRaw}
+                  onChange={(e) => setLanguagesRaw(e.target.value)}
+                  onBlur={(e) => {
+                    const langs = e.target.value.split(',').map(l => l.trim()).filter(l => l.length > 0);
+                    setFormData({ ...formData, languages: langs });
+                  }}
+                  placeholder="Enter languages separated by commas (e.g., Amharic, English, Oromo)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400 bg-white"
+                />
               </div>
 
               {/* Status Selection */}
@@ -461,87 +528,42 @@ const TourismsManagementPage = () => {
                 onChange={handleInputChange} options={STATUS_OPTIONS}
               />
 
-              {/* Main Image URL */}
-              <div className="border-t-2 border-gray-300 pt-4 mt-4">
-                <h4 className="text-md font-black text-gray-800 mb-3">📷 Main Image</h4>
-                <FormInput label="Main Image URL" name="imageUrl" value={(formData as any).imageUrl || ''}
-                  onChange={handleInputChange} placeholder="https://example.com/image.jpg"
-                  helpText="Enter the URL of the main/cover image for this tourism place"
+              {/* Main Image */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <ImageUpload
+                  label="Main Image"
+                  currentImageUrl={(formData as any).imageUrl || ''}
+                  onUpload={async (file) => {
+                    if (editingTourism) {
+                      // Upload immediately for existing tourism
+                      return await AdminImageUploadService.uploadTourismMainImage(token!, editingTourism.id, file);
+                    } else {
+                      // For new tourism, store file temporarily and upload after creation
+                      (window as any).__pendingTourismMainImage = file;
+                      return URL.createObjectURL(file);
+                    }
+                  }}
+                  onUrlChange={(url) => setFormData((prev: any) => ({ ...prev, imageUrl: url }))}
                 />
-                {(formData as any).imageUrl && (
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-700 font-semibold mb-1">Preview:</p>
-                    <img src={(formData as any).imageUrl} alt="Main preview" 
-                      className="w-32 h-24 object-cover rounded-lg border-2 border-gray-300" 
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                )}
               </div>
 
-              {/* Gallery Images */}
-              <div className="border-t-2 border-gray-300 pt-4 mt-4">
-                <h4 className="text-md font-black text-gray-800 mb-3">🖼️ Gallery Images</h4>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    placeholder="Enter image URL and click Add"
-                    className="flex-1 px-3 py-2 border-2 border-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold bg-gray-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (newImageUrl.trim()) {
-                        setFormData(prev => ({
-                          ...prev,
-                          images: [...(prev.images || []), newImageUrl.trim()]
-                        }));
-                        setNewImageUrl('');
-                      }
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold border-2 border-green-700"
-                  >
-                    Add
-                  </button>
-                </div>
-                {formData.images && formData.images.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {formData.images.map((img, idx) => (
-                      <div key={idx} className="relative group">
-                        <img src={img} alt={`Gallery ${idx + 1}`} 
-                          className="w-full h-20 object-cover rounded-lg border-2 border-gray-300"
-                          onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/100?text=Error'; }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              images: prev.images?.filter((_, i) => i !== idx) || []
-                            }));
-                          }}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-gray-600 font-medium mt-2">
-                  💡 Tip: For detailed internal images (like Bete Giorgis, Bete Maryam), use the "📸 Images" button after creating the place.
-                </p>
-              </div>
+              {/* Note about internal images - removed */}
             </div>
 
-            <div className="sticky bottom-0 bg-gray-100 border-t-2 border-gray-300 px-6 py-4 flex justify-end space-x-3">
-              <FormButton variant="secondary" onClick={() => { setShowModal(false); resetForm(); }}>Cancel</FormButton>
-              <FormButton variant="primary" onClick={editingTourism ? handleUpdate : handleCreate}
-                loading={actionLoading !== null} disabled={actionLoading !== null}>
-                {editingTourism ? 'Update Tourism Place' : 'Create Tourism Place'}
-              </FormButton>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 py-2.5 flex justify-end space-x-2 z-10">
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-semibold text-sm transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingTourism ? handleUpdate : handleCreate}
+                disabled={actionLoading !== null}
+                className="px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 font-semibold text-sm transition-all"
+              >
+                {actionLoading !== null ? 'Saving...' : editingTourism ? 'Update' : 'Create'}
+              </button>
             </div>
           </div>
         </div>

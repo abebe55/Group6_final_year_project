@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+target/
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.test
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# IDE
+.idea/
+.vscode/
+.kiro/
+*.iws
+*.iml
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Java
+*.class
+*.jar
+!mvnw
+!mvnw.cmd
+
+# SSL Certificates
+*.pem
+certificates/
+
+# Uploads (runtime data)
+uploads/
+
+# Test artifacts
+frontend/test-results/
+frontend/playwright-report/
+backend-nodejs/coverage/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Documentation and test guide (not for GitHub)
+documentation/
+TESTGUIDE.md
+USER_MANUAL.md

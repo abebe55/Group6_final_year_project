@@ -608,7 +608,7 @@ export default function HotelDetailPage() {
                     <span className="absolute bottom-0 right-0 flex items-end">
                       <span className="w-12 h-4 bg-gradient-to-r from-transparent to-white" />
                       <button onClick={() => openDetailModal('description')} className="bg-white text-blue-600 text-xs font-bold hover:text-blue-800 transition-all whitespace-nowrap leading-relaxed">
-                        See More →
+                        {t("common.seeMore")} →
                       </button>
                     </span>
                   </div>
@@ -623,7 +623,7 @@ export default function HotelDetailPage() {
                       <span className="absolute bottom-0 right-0 flex items-end">
                         <span className="w-12 h-4 bg-gradient-to-r from-transparent to-white" />
                         <button onClick={() => openDetailModal('policies')} className="bg-white text-blue-600 text-xs font-bold hover:text-blue-800 transition-all whitespace-nowrap leading-relaxed">
-                          See More →
+                          {t("common.seeMore")} →
                         </button>
                       </span>
                     </div>
@@ -639,7 +639,7 @@ export default function HotelDetailPage() {
                     <span className="absolute bottom-0 right-0 flex items-end">
                       <span className="w-12 h-4 bg-gradient-to-r from-transparent to-white" />
                       <button onClick={() => setRatingsViewOpen(true)} className="bg-white text-blue-600 text-xs font-bold hover:text-blue-800 transition-all whitespace-nowrap leading-relaxed">
-                        See Reviews →
+                        {t("common.seeReviews")} →
                       </button>
                     </span>
                   </div>

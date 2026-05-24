@@ -1,37 +1,38 @@
-// frontend/src/types/map.ts - COMPLETE FILE
+export interface LocationCoordinates {
+  latitude: number;
+  longitude: number;
+}
 
-// frontend/src/types/map.ts
-// Match backend MapPointType enum: TOURISM_PLACE, HOTEL, ROAD
-export type MapPointType = "TOURISM_PLACE" | "HOTEL" | "ROAD";
+export interface MapMarker {
+  id: string;
+  name: string;
+  coordinates: LocationCoordinates;
+  type: 'user' | 'tourism';
+  icon?: string;
+}
 
+export interface RouteInfo {
+  distance: number; // in meters
+  duration: number; // in seconds
+  coordinates: [number, number][]; // [lat, lng] pairs
+}
+
+export interface MapState {
+  userLocation: LocationCoordinates | null;
+  tourismLocation: LocationCoordinates | null;
+  route: RouteInfo | null;
+  loading: boolean;
+  error: string | null;
+}
 
 export interface MapPointDto {
   id: number;
   name: string;
+  type: string;
   latitude: number;
   longitude: number;
-  type: MapPointType;
   description?: string;
-  active: boolean;
   tourismPlaceId?: number;
   hotelId?: number;
   roadInfoId?: number;
-}
-
-export interface RoadInfoDto {
-  id: number;
-  tourismPlaceId: number;
-  distance: number;
-  estimatedTime: string;
-  routeDescription: string;
-  majorLandmarks: string[];
-  difficulty: "easy" | "medium" | "hard";
-}
-
-// ✅ MISSING - ADD THIS:
-export interface DistanceInfoDto {
-  from: string;
-  to: string;
-  distance: number;  // in km
-  duration: string;  // "2 hours 30 mins"
 }

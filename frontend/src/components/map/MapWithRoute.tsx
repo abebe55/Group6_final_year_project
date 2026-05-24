@@ -1,10 +1,10 @@
 "use client";
 
-import { MapContainer as LeafletMap, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import { MapContainer as LeafletMap, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { MapPointDto } from "@/types/map";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 // Fix for default marker icons in Leaflet with Next.js
 const createIcon = (color: string) => {
@@ -38,20 +38,49 @@ interface Props {
   endPlace: string;
 }
 
+// Component to handle map cleanup
+function MapCleanup() {
+  const map = useMap();
+  
+  useEffect(() => {
+    return () => {
+      // Cleanup map instance on unmount
+      if (map) {
+        map.remove();
+      }
+    };
+  }, [map]);
+  
+  return null;
+}
+
 export default function MapWithRoute({ points, roadType, startPlace, endPlace }: Props) {
   const [isClient, setIsClient] = useState(false);
-  const mapId = useRef(`map-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [mapReady, setMapReady] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
 
+  // Only render on client side
   useEffect(() => {
     setIsClient(true);
+    
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      setMapReady(true);
+    }, 100);
+    
     return () => {
-      // Cleanup on unmount
-      setIsClient(false);
+      clearTimeout(timer);
+      // Cleanup any existing map instance
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
     };
   }, []);
 
   // Calculate center and bounds
-  const getCenter = (): [number, number] => {
+  const getCenter = useCallback((): [number, number] => {
     if (points.length === 0) return [11.5, 39.5]; // North Wollo default
     
     const lats = points.map(p => p.latitude);
@@ -61,13 +90,13 @@ export default function MapWithRoute({ points, roadType, startPlace, endPlace }:
       (Math.min(...lats) + Math.max(...lats)) / 2,
       (Math.min(...lngs) + Math.max(...lngs)) / 2,
     ];
-  };
+  }, [points]);
 
-  const getZoom = (): number => {
+  const getZoom = useCallback((): number => {
     if (points.length <= 1) return 13;
     if (points.length <= 3) return 11;
     return 10;
-  };
+  }, [points.length]);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -102,26 +131,29 @@ export default function MapWithRoute({ points, roadType, startPlace, endPlace }:
   // Create route line from points
   const routePositions: [number, number][] = points.map(p => [p.latitude, p.longitude]);
 
-  if (!isClient) {
+  // Don't render on server side or before ready
+  if (!isClient || !mapReady) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing map...</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
       </div>
     );
   }
 
   return (
-    <div id={mapId.current} className="w-full h-full">
+    <div ref={containerRef} className="w-full h-full">
       <LeafletMap 
         center={getCenter()} 
         zoom={getZoom()} 
         className="w-full h-full"
         scrollWheelZoom={true}
-        key={mapId.current}
+        ref={(map) => {
+          if (map) {
+            mapInstanceRef.current = map;
+          }
+        }}
       >
+        <MapCleanup />
         <TileLayer
           attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -141,7 +173,7 @@ export default function MapWithRoute({ points, roadType, startPlace, endPlace }:
         {/* Markers */}
         {points.map((point, index) => (
           <Marker 
-            key={point.id} 
+            key={`marker-${point.id}`} 
             position={[point.latitude, point.longitude]}
             icon={getIcon(point.type)}
           >
