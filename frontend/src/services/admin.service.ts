@@ -47,7 +47,7 @@ export interface User {
   username: string;
   email: string;
   fullName: string;
-  roles: string[];
+  roles: (string | { id: number; name: string })[];
   active: boolean;
   emailVerified: boolean;
   createdAt: string;
@@ -74,6 +74,9 @@ export interface HotelCreateDto {
   policies?: string;
   images?: string[];
   mainImageUrl?: string;
+  active?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface HotelUpdateDto {
@@ -83,6 +86,10 @@ export interface HotelUpdateDto {
   contactInfo?: string;
   policies?: string;
   images?: string[];
+  mainImageUrl?: string;
+  active?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Hotel {
@@ -93,7 +100,7 @@ export interface Hotel {
   stars?: number;  // Backend returns 'stars' instead of 'starRating'
   contactInfo?: string;
   policies?: string;
-  images: string[];
+  images: (string | { id?: number; imageUrl: string; displayOrder?: number })[];
   viewersCount?: number;
   tourismId?: number;
   tourismPlaceId?: number;  // Backend returns this property
@@ -112,7 +119,7 @@ export interface TourismCreateDto {
   description: string;
   wereda: string;
   kebele: string;
-  category?: string;
+  categories: string[];
   bestTime?: string;
   peaceInfo?: string;
   visitTime?: string;
@@ -127,7 +134,7 @@ export interface TourismUpdateDto {
   description?: string;
   wereda?: string;
   kebele?: string;
-  category?: string;
+  categories?: string[];
   bestTime?: string;
   peaceInfo?: string;
   visitTime?: string;
@@ -143,7 +150,7 @@ export interface Tourism {
   description: string;
   wereda: string;
   kebele: string;
-  category?: string;
+  categories?: string[];
   bestTime?: string;
   peaceInfo?: string;
   visitTime?: string;
@@ -176,69 +183,53 @@ export interface TourismImageCreateDto {
 }
 
 // ========================
+// Hotel Image Types
+// ========================
+export interface HotelImage {
+  id: number;
+  imageUrl: string;
+  title: string | null;
+  description: string | null;
+  isMain: boolean;
+  displayOrder: number;
+}
+
+export interface HotelImageCreateDto {
+  imageUrl: string;
+  title?: string;
+  description?: string;
+  isMain?: boolean;
+  displayOrder?: number;
+}
+
+// ========================
 // Guider Types
 // ========================
 export interface GuiderCreateDto {
-  fullName: string;
+  name: string;
   contactInfo: string;
   languages: string[];
-  tourismPlaceId: number;
+  experience?: string;
   active?: boolean;
+  tourismPlaceId?: number;
 }
 
 export interface GuiderUpdateDto {
-  fullName?: string;
+  name?: string;
   contactInfo?: string;
   languages?: string[];
+  experience?: string;
   active?: boolean;
 }
 
 export interface Guider {
   id: number;
-  fullName: string;
+  name: string;
   contactInfo: string;
   languages: string[];
+  experience?: string;
   active: boolean;
-  tourismPlaceId?: number;
   createdAt: string;
-}
-
-// ========================
-// Map Point Types
-// ========================
-export interface MapPointCreateDto {
-  name: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  description?: string;
-  tourismPlaceId?: number;  // Match backend field name
-  hotelId?: number;
-  roadInfoId?: number;
-  active?: boolean;
-}
-
-export interface MapPointUpdateDto {
-  name?: string;
-  latitude?: number;
-  longitude?: number;
-  type?: string;
-  description?: string;
-  active?: boolean;
-}
-
-export interface MapPoint {
-  id: number;
-  name: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  description?: string;
-  tourismPlaceId?: number;
-  hotelId?: number;
-  roadInfoId?: number;
-  active?: boolean;
-  createdAt?: string;
 }
 
 // ========================
@@ -267,6 +258,7 @@ export interface HorseService {
   initialPlace: string;
   cost: number;
   roadInfoId?: number;
+  active?: boolean;
   createdAt?: string;
 }
 
@@ -297,7 +289,7 @@ export interface Booking {
 export interface RoadCreateDto {
   tourismPlaceId: number;
   initialPlace: string;
-  roadType: string; // "CAR", "FOOT", "PLANE", "HORSE"
+  roadType?: string; // "CAR", "FOOT", "HORSE", "PLANE"
   description?: string;
   distanceByCar?: number;
   distanceByFoot?: number;
@@ -328,7 +320,9 @@ export interface Road {
   distanceByHorse?: number;
   totalDistance?: number;
   tourismPlaceId?: number;
+  active?: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 // ========================
@@ -422,19 +416,61 @@ export class AdminUserService {
 export class AdminHotelService {
   // Backend: GET /api/admin/hotels
   static async getAllHotels(token: string, page = 0, size = 20): Promise<{ content: Hotel[]; totalElements: number; totalPages: number }> {
-    const response = await fetch(
-      `${API_BASE_URL}/admin/hotels`,
-      { headers: getAuthHeaders(token) }
-    );
-    const data = await handleResponse<Hotel[]>(response);
-    // Client-side pagination
-    const startIndex = page * size;
-    const paginatedContent = data.slice(startIndex, startIndex + size);
-    return { 
-      content: paginatedContent, 
-      totalElements: data.length, 
-      totalPages: Math.ceil(data.length / size) 
-    };
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/admin/hotels`,
+        { headers: getAuthHeaders(token) }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API Error ${response.status}:`, errorText);
+        throw new Error(errorText || `Request failed: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get("content-type");
+      let data: any;
+      
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        throw new Error("Response is not JSON");
+      }
+      
+      console.log('🏨 Hotels raw data:', data);
+      console.log('🏨 Is array?', Array.isArray(data));
+      console.log('🏨 Data type:', typeof data);
+      
+      // Handle pagination on the frontend since backend returns a simple list
+      let allHotels: Hotel[] = [];
+      
+      if (Array.isArray(data)) {
+        allHotels = data;
+        console.log('✅ Data is array with', allHotels.length, 'hotels');
+      } else if (data && typeof data === 'object') {
+        allHotels = data.content || [];
+        console.log('✅ Data is object, content has', allHotels.length, 'hotels');
+      }
+      
+      console.log('🏨 All hotels:', allHotels);
+      console.log('🏨 First hotel:', allHotels[0]);
+      
+      const start = page * size;
+      const end = start + size;
+      const pageContent = allHotels.slice(start, end);
+      const totalPages = Math.ceil(allHotels.length / size);
+      
+      console.log(`📄 Page ${page}: showing ${pageContent.length} items out of ${allHotels.length}`);
+      
+      return {
+        content: pageContent,
+        totalElements: allHotels.length,
+        totalPages: totalPages
+      };
+    } catch (error) {
+      console.error('❌ Error fetching hotels:', error);
+      throw error;
+    }
   }
 
   // Backend: GET /api/hotels/{id}/detail
@@ -447,7 +483,7 @@ export class AdminHotelService {
   }
 
   // Backend: POST /api/admin/hotels
-  static async createHotel(token: string, data: HotelCreateDto): Promise<number> {
+  static async createHotel(token: string, data: HotelCreateDto): Promise<Hotel> {
     const response = await fetch(
       `${API_BASE_URL}/admin/hotels`,
       {
@@ -456,7 +492,10 @@ export class AdminHotelService {
         body: JSON.stringify(data),
       }
     );
-    return handleResponse<number>(response);
+    const result = await handleResponse<Hotel>(response);
+    console.log('✅ Hotel created successfully:', result);
+    console.log('📷 Hotel images:', result.images);
+    return result;
   }
 
   // Backend: PUT /api/admin/hotels/{id}
@@ -529,6 +568,61 @@ export class AdminHotelService {
     );
     return handleResponse<void>(response);
   }
+
+  // Backend: GET /api/admin/hotels/{hotelId}/images
+  static async getHotelImages(token: string, hotelId: number): Promise<HotelImage[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/hotels/${hotelId}/images`,
+      { headers: getAuthHeaders(token) }
+    );
+    return handleResponse<HotelImage[]>(response);
+  }
+
+  // Backend: POST /api/admin/hotels/{hotelId}/images
+  static async addHotelImage(token: string, hotelId: number, data: HotelImageCreateDto): Promise<HotelImage> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/hotels/${hotelId}/images`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify(data),
+      }
+    );
+    return handleResponse<HotelImage>(response);
+  }
+
+  // Backend: PUT /api/admin/hotels/{hotelId}/images/{imageId}
+  static async updateHotelImage(token: string, hotelId: number, imageId: number, data: HotelImageCreateDto): Promise<HotelImage> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/hotels/${hotelId}/images/${imageId}`,
+      {
+        method: "PUT",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify(data),
+      }
+    );
+    return handleResponse<HotelImage>(response);
+  }
+
+  // Set main image using dedicated endpoint
+  static async setMainHotelImage(token: string, hotelId: number, imageUrl: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/hotels/${hotelId}/set-main-image`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify({ imageUrl }),
+      }
+    );
+    return handleResponse<void>(response);
+  }
+
+  // Get the current main imageUrl for a hotel
+  static async getHotelMainImageUrl(token: string, hotelId: number): Promise<string | null> {
+    const images = await this.getHotelImages(token, hotelId);
+    const mainImage = images.find(img => img.displayOrder === 0);
+    return mainImage?.imageUrl || null;
+  }
 }
 
 // ========================
@@ -537,19 +631,41 @@ export class AdminHotelService {
 export class AdminTourismService {
   // Backend: GET /api/admin/tourism/all - returns all tourism places with full details for admin page
   static async getAllTourism(token: string, page = 0, size = 20): Promise<{ content: Tourism[]; totalElements: number; totalPages: number }> {
-    const response = await fetch(
-      `${API_BASE_URL}/admin/tourism/all`,
-      { headers: getAuthHeaders(token) }
-    );
-    const data = await handleResponse<Tourism[]>(response);
-    // Client-side pagination
-    const startIndex = page * size;
-    const paginatedContent = data.slice(startIndex, startIndex + size);
-    return { 
-      content: paginatedContent, 
-      totalElements: data.length, 
-      totalPages: Math.ceil(data.length / size) 
-    };
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/admin/tourism/all`,
+        { headers: getAuthHeaders(token) }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API Error ${response.status}:`, errorText);
+        throw new Error(errorText || `Request failed: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('📊 Tourism data received:', data);
+      
+      // Handle pagination on the frontend since backend returns a simple list
+      const allTourisms = Array.isArray(data) ? data : (data.content || []);
+      console.log('📋 All tourisms count:', allTourisms.length);
+      
+      const start = page * size;
+      const end = start + size;
+      const pageContent = allTourisms.slice(start, end);
+      const totalPages = Math.ceil(allTourisms.length / size);
+      
+      console.log(`📄 Page ${page}: showing ${pageContent.length} items out of ${allTourisms.length}`);
+      
+      return {
+        content: pageContent,
+        totalElements: allTourisms.length,
+        totalPages: totalPages
+      };
+    } catch (error) {
+      console.error('❌ Error fetching tourisms:', error);
+      throw error;
+    }
   }
 
   // Backend: GET /api/admin/tourism/list - returns simple list for dropdowns
@@ -663,13 +779,27 @@ export class AdminTourismService {
     return handleResponse<void>(response);
   }
 
-  // Backend: PUT /api/admin/tourism/{tourismId}/images/{imageId}/set-main
-  static async setMainTourismImage(token: string, tourismId: number, imageId: number): Promise<void> {
+  // Set main image by updating tourismPlace.imageUrl via PUT /api/admin/tourism/{tourismId}
+  static async setMainTourismImage(token: string, tourismId: number, imageUrl: string): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/tourism/${tourismId}/images/${imageId}/set-main`,
-      { method: "PUT", headers: getAuthHeaders(token) }
+      `${API_BASE_URL}/admin/tourism/${tourismId}`,
+      {
+        method: "PUT",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify({ imageUrl }),
+      }
     );
     return handleResponse<void>(response);
+  }
+
+  // Get the current main imageUrl for a tourism place
+  static async getTourismMainImageUrl(token: string, tourismId: number): Promise<string | null> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/tourism/${tourismId}`,
+      { headers: getAuthHeaders(token) }
+    );
+    const data = await handleResponse<{ imageUrl?: string }>(response);
+    return data.imageUrl || null;
   }
 }
 
@@ -693,7 +823,7 @@ export class AdminGuiderService {
 
   static async getGuidersByTourism(token: string, tourismId: number): Promise<Guider[]> {
     const response = await fetch(
-      `${API_BASE_URL}/guiders/tourism/${tourismId}`,
+      `${API_BASE_URL}/admin/guiders/tourism/${tourismId}`,
       { headers: getAuthHeaders(token) }
     );
     return handleResponse<Guider[]>(response);
@@ -709,7 +839,7 @@ export class AdminGuiderService {
 
   static async createGuider(token: string, data: GuiderCreateDto): Promise<number> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/guiders`,
+      `${API_BASE_URL}/language-guiders`,
       {
         method: "POST",
         headers: getAuthHeaders(token),
@@ -721,7 +851,7 @@ export class AdminGuiderService {
 
   static async updateGuider(token: string, guiderId: number, data: GuiderUpdateDto): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/guiders/${guiderId}`,
+      `${API_BASE_URL}/language-guiders/${guiderId}`,
       {
         method: "PUT",
         headers: getAuthHeaders(token),
@@ -733,96 +863,23 @@ export class AdminGuiderService {
 
   static async deleteGuider(token: string, guiderId: number): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/guiders/${guiderId}`,
+      `${API_BASE_URL}/language-guiders/${guiderId}`,
       { method: "DELETE", headers: getAuthHeaders(token) }
     );
     return handleResponse<void>(response);
   }
+
+  static async toggleGuiderActive(token: string, guiderId: number): Promise<Guider> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/guiders/${guiderId}/toggle-active`,
+      { method: "PATCH", headers: getAuthHeaders(token) }
+    );
+    const result = await handleResponse<{ guider: Guider }>(response);
+    return result.guider;
+  }
 }
 
 // ========================
-// MAP POINT MANAGEMENT
-// ========================
-export class AdminMapPointService {
-  static async getAllMapPoints(token: string, tourismId?: number, type?: string): Promise<{ content: MapPoint[]; totalElements: number; totalPages: number }> {
-    // Backend returns map points by tourism place or type
-    if (tourismId) {
-      const response = await fetch(
-        `${API_BASE_URL}/map-points/tourism/${tourismId}`,
-        { headers: getAuthHeaders(token) }
-      );
-      const data = await handleResponse<MapPoint[]>(response);
-      return { content: data, totalElements: data.length, totalPages: 1 };
-    }
-    if (type) {
-      const response = await fetch(
-        `${API_BASE_URL}/map-points/type/${type}`,
-        { headers: getAuthHeaders(token) }
-      );
-      const data = await handleResponse<MapPoint[]>(response);
-      return { content: data, totalElements: data.length, totalPages: 1 };
-    }
-    // Return empty if no filter - frontend should handle this
-    return { content: [], totalElements: 0, totalPages: 0 };
-  }
-
-  static async getMapPointsByTourism(token: string, tourismId: number): Promise<MapPoint[]> {
-    const response = await fetch(
-      `${API_BASE_URL}/map-points/tourism/${tourismId}`,
-      { headers: getAuthHeaders(token) }
-    );
-    return handleResponse<MapPoint[]>(response);
-  }
-
-  static async getMapPointsByType(token: string, type: string): Promise<MapPoint[]> {
-    const response = await fetch(
-      `${API_BASE_URL}/map-points/type/${type}`,
-      { headers: getAuthHeaders(token) }
-    );
-    return handleResponse<MapPoint[]>(response);
-  }
-
-  static async getMapPointById(token: string, mapPointId: number): Promise<MapPoint> {
-    const response = await fetch(
-      `${API_BASE_URL}/map-points/${mapPointId}`,
-      { headers: getAuthHeaders(token) }
-    );
-    return handleResponse<MapPoint>(response);
-  }
-
-  static async createMapPoint(token: string, data: MapPointCreateDto): Promise<number> {
-    const response = await fetch(
-      `${API_BASE_URL}/admin/map-points`,
-      {
-        method: "POST",
-        headers: getAuthHeaders(token),
-        body: JSON.stringify(data),
-      }
-    );
-    return handleResponse<number>(response);
-  }
-
-  static async updateMapPoint(token: string, mapPointId: number, data: MapPointUpdateDto): Promise<void> {
-    const response = await fetch(
-      `${API_BASE_URL}/admin/map-points/${mapPointId}`,
-      {
-        method: "PUT",
-        headers: getAuthHeaders(token),
-        body: JSON.stringify(data),
-      }
-    );
-    return handleResponse<void>(response);
-  }
-
-  static async deleteMapPoint(token: string, mapPointId: number): Promise<void> {
-    const response = await fetch(
-      `${API_BASE_URL}/admin/map-points/${mapPointId}`,
-      { method: "DELETE", headers: getAuthHeaders(token) }
-    );
-    return handleResponse<void>(response);
-  }
-}
-
 // ========================
 // HORSE SERVICE MANAGEMENT
 // ========================
@@ -844,7 +901,7 @@ export class AdminHorseServiceService {
 
   static async getHorseServicesByRoad(token: string, roadId: number): Promise<HorseService[]> {
     const response = await fetch(
-      `${API_BASE_URL}/roads/${roadId}/horse-services`,
+      `${API_BASE_URL}/admin/horse-services/road/${roadId}`,
       { headers: getAuthHeaders(token) }
     );
     return handleResponse<HorseService[]>(response);
@@ -860,7 +917,7 @@ export class AdminHorseServiceService {
 
   static async createHorseService(token: string, data: HorseServiceCreateDto): Promise<number> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/horse-services`,
+      `${API_BASE_URL}/horse-services`,
       {
         method: "POST",
         headers: getAuthHeaders(token),
@@ -872,7 +929,7 @@ export class AdminHorseServiceService {
 
   static async updateHorseService(token: string, horseServiceId: number, data: HorseServiceUpdateDto): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/horse-services/${horseServiceId}`,
+      `${API_BASE_URL}/horse-services/${horseServiceId}`,
       {
         method: "PUT",
         headers: getAuthHeaders(token),
@@ -884,10 +941,19 @@ export class AdminHorseServiceService {
 
   static async deleteHorseService(token: string, horseServiceId: number): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/horse-services/${horseServiceId}`,
+      `${API_BASE_URL}/horse-services/${horseServiceId}`,
       { method: "DELETE", headers: getAuthHeaders(token) }
     );
     return handleResponse<void>(response);
+  }
+
+  static async toggleHorseServiceActive(token: string, horseServiceId: number): Promise<HorseService> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/horse-services/${horseServiceId}/toggle-active`,
+      { method: "PATCH", headers: getAuthHeaders(token) }
+    );
+    const result = await handleResponse<{ service: HorseService }>(response);
+    return result.service;
   }
 }
 
@@ -901,9 +967,55 @@ export class AdminBookingService {
       `${API_BASE_URL}/bookings/admin/all?page=${page}&size=${size}`,
       { headers: getAuthHeaders(token) }
     );
-    const data = await handleResponse<Booking[]>(response);
-    // Backend returns array, wrap in page format
-    return { content: data, totalElements: data.length, totalPages: 1 };
+    const data = await handleResponse<{ content: any[]; totalElements: number; totalPages: number }>(response);
+    
+    // Transform backend response to match frontend Booking interface
+    const transformedContent = (data.content || []).map((b: any) => {
+      // Handle both transformed and raw formats
+      if (b.bookingId) {
+        // Already transformed
+        return b;
+      }
+      
+      // Transform from backend format
+      return {
+        bookingId: b.id,
+        hotel: b.hotel ? {
+          id: b.hotel.id,
+          name: b.hotel.name,
+          contactInfo: b.hotel.contactInfo,
+          active: b.hotel.active,
+          ownerName: b.hotel.owner?.fullName,
+        } : null,
+        client: b.user ? {
+          id: b.user.id,
+          fullName: b.user.fullName,
+          username: b.user.username,
+          email: b.user.email,
+          phone: b.clientPhone,
+        } : null,
+        checkIn: b.checkIn,
+        checkOut: b.checkOut,
+        numberOfGuests: b.numberOfGuests,
+        numberOfRooms: b.numberOfRooms,
+        specialRequests: b.specialRequests,
+        bookingStatus: b.status?.name || 'UNKNOWN',
+        totalCost: b.totalCost,
+        receiptImageUrl: b.receiptImageUrl,
+        rejectionReason: b.rejectionReason,
+        problemReport: b.problemReport,
+        problemReported: b.problemReported,
+        createdAt: b.createdAt,
+        updatedAt: b.updatedAt,
+        messages: b.messages || [],
+      };
+    });
+    
+    return { 
+      content: transformedContent, 
+      totalElements: data.totalElements, 
+      totalPages: data.totalPages 
+    };
   }
 
   // Backend: GET /api/bookings/{id}?userId={userId}
@@ -921,7 +1033,49 @@ export class AdminBookingService {
       `${API_BASE_URL}/bookings/admin/problems`,
       { headers: getAuthHeaders(token) }
     );
-    return handleResponse<Booking[]>(response);
+    const data = await handleResponse<any[]>(response);
+    
+    // Transform backend response to match frontend Booking interface
+    return (data || []).map((b: any) => {
+      // Handle both transformed and raw formats
+      if (b.bookingId) {
+        // Already transformed
+        return b;
+      }
+      
+      // Transform from backend format
+      return {
+        bookingId: b.id,
+        hotel: b.hotel ? {
+          id: b.hotel.id,
+          name: b.hotel.name,
+          contactInfo: b.hotel.contactInfo,
+          active: b.hotel.active,
+          ownerName: b.hotel.owner?.fullName,
+        } : null,
+        client: b.user ? {
+          id: b.user.id,
+          fullName: b.user.fullName,
+          username: b.user.username,
+          email: b.user.email,
+          phone: b.clientPhone,
+        } : null,
+        checkIn: b.checkIn,
+        checkOut: b.checkOut,
+        numberOfGuests: b.numberOfGuests,
+        numberOfRooms: b.numberOfRooms,
+        specialRequests: b.specialRequests,
+        bookingStatus: b.status?.name || 'UNKNOWN',
+        totalCost: b.totalCost,
+        receiptImageUrl: b.receiptImageUrl,
+        rejectionReason: b.rejectionReason,
+        problemReport: b.problemReport,
+        problemReported: b.problemReported,
+        createdAt: b.createdAt,
+        updatedAt: b.updatedAt,
+        messages: b.messages || [],
+      };
+    });
   }
 
   // Backend: POST /api/bookings/{id}/cost?cost={cost}&ownerId={ownerId}
@@ -985,7 +1139,7 @@ export class AdminRoadService {
 
   static async getRoadsByTourism(token: string, tourismId: number): Promise<Road[]> {
     const response = await fetch(
-      `${API_BASE_URL}/tourisms/${tourismId}/roads`,
+      `${API_BASE_URL}/admin/roads/tourism/${tourismId}`,
       { headers: getAuthHeaders(token) }
     );
     return handleResponse<Road[]>(response);
@@ -993,7 +1147,7 @@ export class AdminRoadService {
 
   static async getRoadById(token: string, roadId: number): Promise<Road> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/roads/${roadId}`,
+      `${API_BASE_URL}/roads/${roadId}`,
       { headers: getAuthHeaders(token) }
     );
     return handleResponse<Road>(response);
@@ -1001,7 +1155,7 @@ export class AdminRoadService {
 
   static async createRoad(token: string, data: RoadCreateDto): Promise<number> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/roads`,
+      `${API_BASE_URL}/roads`,
       {
         method: "POST",
         headers: getAuthHeaders(token),
@@ -1013,7 +1167,7 @@ export class AdminRoadService {
 
   static async updateRoad(token: string, roadId: number, data: RoadUpdateDto): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/roads/${roadId}`,
+      `${API_BASE_URL}/roads/${roadId}`,
       {
         method: "PUT",
         headers: getAuthHeaders(token),
@@ -1025,9 +1179,108 @@ export class AdminRoadService {
 
   static async deleteRoad(token: string, roadId: number): Promise<void> {
     const response = await fetch(
-      `${API_BASE_URL}/admin/roads/${roadId}`,
+      `${API_BASE_URL}/roads/${roadId}`,
       { method: "DELETE", headers: getAuthHeaders(token) }
     );
     return handleResponse<void>(response);
+  }
+
+  static async toggleRoadActive(token: string, roadId: number): Promise<Road> {
+    const response = await fetch(
+      `${API_BASE_URL}/admin/roads/${roadId}/toggle-active`,
+      { method: "PATCH", headers: getAuthHeaders(token) }
+    );
+    const result = await handleResponse<{ road: Road }>(response);
+    return result.road;
+  }
+}
+
+// ========================
+// IMAGE UPLOAD SERVICE
+// ========================
+export class AdminImageUploadService {
+  private static async uploadFile(token: string, url: string, file: File, extraFields?: Record<string, string>): Promise<string> {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (extraFields) {
+      Object.entries(extraFields).forEach(([k, v]) => formData.append(k, v));
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(err || 'Upload failed');
+    }
+    const data = await response.json();
+    return data.imageUrl;
+  }
+
+  // Upload tourism main image
+  static async uploadTourismMainImage(token: string, tourismId: number, file: File): Promise<string> {
+    return this.uploadFile(token, `${API_BASE_URL}/admin/tourism/${tourismId}/main-image/upload`, file);
+  }
+
+  // Upload tourism gallery image
+  static async uploadTourismGalleryImage(token: string, tourismId: number, file: File, title?: string, description?: string): Promise<string> {
+    return this.uploadFile(token, `${API_BASE_URL}/admin/tourism/${tourismId}/images/upload`, file, {
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+    });
+  }
+
+  // Upload hotel main image
+  static async uploadHotelMainImage(token: string, hotelId: number, file: File): Promise<string> {
+    return this.uploadFile(token, `${API_BASE_URL}/admin/hotels/${hotelId}/main-image/upload`, file);
+  }
+
+  // Upload hotel gallery image
+  static async uploadHotelGalleryImage(token: string, hotelId: number, file: File, title?: string, description?: string): Promise<string> {
+    return this.uploadFile(token, `${API_BASE_URL}/admin/hotels/${hotelId}/images/upload`, file, {
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+    });
+  }
+
+  // Upload hero image (creates new hero image record)
+  static async uploadHeroImage(token: string, file: File, title?: string, description?: string, displayOrder?: number, active?: boolean): Promise<{ imageUrl: string; id: number }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (title) formData.append('title', title);
+    if (description) formData.append('description', description);
+    if (displayOrder !== undefined) formData.append('displayOrder', String(displayOrder));
+    if (active !== undefined) formData.append('active', String(active));
+    const response = await fetch(`${API_BASE_URL}/admin/hero-images/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(err || 'Upload failed');
+    }
+    return response.json();
+  }
+
+  // Update hero image with optional new file
+  static async updateHeroImageWithUpload(token: string, id: number, file: File | null, fields: { title?: string; description?: string; displayOrder?: number; active?: boolean }): Promise<any> {
+    const formData = new FormData();
+    if (file) formData.append('image', file);
+    if (fields.title !== undefined) formData.append('title', fields.title);
+    if (fields.description !== undefined) formData.append('description', fields.description);
+    if (fields.displayOrder !== undefined) formData.append('displayOrder', String(fields.displayOrder));
+    if (fields.active !== undefined) formData.append('active', String(fields.active));
+    const response = await fetch(`${API_BASE_URL}/admin/hero-images/${id}/upload`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(err || 'Update failed');
+    }
+    return response.json();
   }
 }

@@ -1,11 +1,14 @@
 // frontend/src/types/tourism.ts
 
+import { TourismImageDto } from "./tourismImage";
+
 export interface TourismPublicCard {
   id: number;
   name: string;
   imageUrl?: string;
   viewersCount: number;
   category?: string;
+  categories?: string[];
   wereda?: string;
   kebele?: string;
   description?: string;
@@ -15,7 +18,7 @@ export interface NearbyTourismDto {
   id: number;
   name: string;
   imageUrl?: string;
-  category?: string;
+  categories?: string[];
   wereda?: string;
 }
 
@@ -45,12 +48,15 @@ export interface TourismFullDetailDto {
   kebele: string;
   bestTime?: string;
   peaceInfo?: string;
-  visitTime?: string; // duration in ISO 8601 format
+  visitTime?: string;
   languages: string[];
   viewersCount: number;
-  category?: string;
+  categories?: string[];
+  imageUrl?: string;
   createdAt?: string;
-  images: string[];
+  latitude?: number;
+  longitude?: number;
+  images: TourismImageDto[];
   nearbyPlaces: NearbyTourismDto[];
   ratingSummary: RatingSummaryResponseDto;
   ratings: TourismRatingResponseDto[];
@@ -61,7 +67,7 @@ export interface TourismPublicCardDto {
   name: string;
   imageUrl?: string;
   viewersCount: number;
-  category?: string;
+  categories?: string[];
   wereda?: string;
   kebele?: string;
   description?: string;

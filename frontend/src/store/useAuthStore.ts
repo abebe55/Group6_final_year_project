@@ -4,9 +4,18 @@ import { create } from "zustand";
 import { useEffect } from "react";
 import { jwtDecode } from "jwt-decode";
 import { refreshToken as refreshTokenAPI, logout as logoutAPI } from "../services/auth.service";
+import { SecurityConfig } from "@/config/security.config";
 
 export type UserRole = "CLIENT" | "HOTEL_OWNER" | "ADMIN";
 export type BrowsingMode = "CLIENT" | "OWNER";
+
+// Pick the highest-privilege role when a user has multiple roles
+function pickRole(roles: string[]): UserRole {
+  const cleaned = roles.map(r => r.replace("ROLE_", ""));
+  if (cleaned.includes("ADMIN")) return "ADMIN";
+  if (cleaned.includes("HOTEL_OWNER")) return "HOTEL_OWNER";
+  return "CLIENT";
+}
 
 interface JwtPayload {
   sub: string;
@@ -21,49 +30,146 @@ interface AuthState {
   username: string | null;
   userId: number | null;
   role: UserRole | null;
-  browsingMode: BrowsingMode;  // NEW: For HOTEL_OWNER to switch between client/owner mode
+  browsingMode: BrowsingMode;
   isAuthenticated: boolean;
   emailVerified: boolean;
   isLoading: boolean;
-  login: (token: string, refreshToken?: string) => void;
+  isHydrated: boolean;
+  expiresAt: string | null;
+  expiresIn: number | null;
+  login: (token: string, refreshToken?: string, userIdFromResponse?: number, expiresAt?: string, expiresIn?: number) => void;
   logout: () => Promise<void>;
   updateEmailVerified: (verified: boolean) => void;
   refreshAccessToken: () => Promise<boolean>;
   isTokenExpired: () => boolean;
   getTimeUntilExpiry: () => number;
-  setBrowsingMode: (mode: BrowsingMode) => void;  // NEW: Switch browsing mode
-  isOwnerMode: () => boolean;  // NEW: Check if in owner mode
+  setBrowsingMode: (mode: BrowsingMode) => void;
+  isOwnerMode: () => boolean;
+  setHydrated: (hydrated: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
-  refreshToken: null,
-  username: null,
-  userId: null,
-  role: null,
-  browsingMode: "CLIENT",  // Default to client mode
-  isAuthenticated: false,
-  emailVerified: false,
-  isLoading: false,
+// Helper to get initial state from localStorage
+const getInitialState = () => {
+  if (typeof window === 'undefined') {
+    return {
+      token: null,
+      refreshToken: null,
+      username: null,
+      userId: null,
+      role: null,
+      browsingMode: "CLIENT" as BrowsingMode,
+      isAuthenticated: false,
+      isHydrated: false,
+    };
+  }
 
-  login: (token: string, refreshToken?: string, userIdFromResponse?: number) => {
+  const token = localStorage.getItem("token");
+  const refreshToken = localStorage.getItem("refreshToken");
+  const storedUserId = localStorage.getItem("userId");
+  const userId = storedUserId ? parseInt(storedUserId, 10) : null;
+
+  if (token) {
     try {
       const decoded = jwtDecode<JwtPayload>(token);
-      const role = decoded.roles[0]?.replace("ROLE_", "") as UserRole;
+      const currentTime = Date.now() / 1000;
       
-      // Use userId from JWT if available, otherwise use the one from response
+      // Check if token is expired
+      if (decoded.exp < currentTime) {
+        console.log('⚠️ Token expired on init, will refresh');
+        return {
+          token,
+          refreshToken,
+          username: decoded.sub,
+          userId: decoded.userId || userId,
+          role: pickRole(decoded.roles),
+          browsingMode: (localStorage.getItem("browsingMode") as BrowsingMode) || "CLIENT",
+          isAuthenticated: false,
+          isHydrated: true,
+        };
+      }
+
+      const role = pickRole(decoded.roles);
+      const savedMode = localStorage.getItem("browsingMode") as BrowsingMode;
+      const browsingMode = (role === "HOTEL_OWNER" && savedMode) ? savedMode : "CLIENT";
+
+      console.log('✅ Token valid on init:', { username: decoded.sub, role });
+      return {
+        token,
+        refreshToken,
+        username: decoded.sub,
+        userId: decoded.userId || userId,
+        role,
+        browsingMode,
+        isAuthenticated: true,
+        isHydrated: true,
+      };
+    } catch (error) {
+      console.error('❌ Failed to decode stored token:', error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userId");
+    }
+  }
+
+  console.log('ℹ️ No valid token on init');
+  return {
+    token: null,
+    refreshToken: null,
+    username: null,
+    userId: null,
+    role: null,
+    browsingMode: "CLIENT" as BrowsingMode,
+    isAuthenticated: false,
+    isHydrated: true,
+  };
+};
+
+const initialState = getInitialState();
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  token: initialState.token,
+  refreshToken: initialState.refreshToken,
+  username: initialState.username,
+  userId: initialState.userId,
+  role: initialState.role,
+  browsingMode: initialState.browsingMode,
+  isAuthenticated: initialState.isAuthenticated,
+  emailVerified: false,
+  isLoading: false,
+  isHydrated: initialState.isHydrated,
+  expiresAt: null,
+  expiresIn: null,
+
+  setHydrated: (hydrated: boolean) => {
+    set({ isHydrated: hydrated });
+  },
+
+  login: (token: string, refreshToken?: string, userIdFromResponse?: number, expiresAt?: string, expiresIn?: number) => {
+    try {
+      const decoded = jwtDecode<JwtPayload>(token);
+      const role = pickRole(decoded.roles);
       const userId = decoded.userId || userIdFromResponse || null;
 
-      localStorage.setItem("token", token);
-      if (refreshToken) {
-        localStorage.setItem("refreshToken", refreshToken);
-      }
-      if (userId) {
-        localStorage.setItem("userId", String(userId));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("token", token);
+        if (refreshToken) {
+          localStorage.setItem("refreshToken", refreshToken);
+        }
+        if (userId) {
+          localStorage.setItem("userId", String(userId));
+        }
+        if (expiresAt) {
+          localStorage.setItem("expiresAt", expiresAt);
+        }
+        if (expiresIn) {
+          localStorage.setItem("expiresIn", String(expiresIn));
+        }
+        
+        // Also set token in cookie for middleware access
+        document.cookie = `token=${token}; path=/; max-age=${expiresIn || 300}; SameSite=Lax`;
       }
 
-      // Restore browsing mode from localStorage if HOTEL_OWNER
-      const savedMode = localStorage.getItem("browsingMode") as BrowsingMode;
+      const savedMode = typeof window !== 'undefined' ? localStorage.getItem("browsingMode") as BrowsingMode : null;
       const browsingMode = (role === "HOTEL_OWNER" && savedMode) ? savedMode : "CLIENT";
 
       set({
@@ -75,9 +181,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         browsingMode,
         isAuthenticated: true,
         isLoading: false,
+        isHydrated: true,
+        expiresAt: expiresAt || null,
+        expiresIn: expiresIn || null,
       });
 
-      console.log('✅ Auth store updated:', { username: decoded.sub, role, userId, browsingMode });
+      console.log('✅ Auth store updated:', { username: decoded.sub, role, userId, browsingMode, expiresIn, expiresAt });
     } catch (error) {
       console.error('❌ Failed to decode token:', error);
       get().logout();
@@ -90,17 +199,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     
     try {
-      // Call logout API to revoke refresh token
       await logoutAPI(refreshToken || undefined);
     } catch (error) {
       console.error('❌ Logout API error:', error);
     }
 
-    // Clear state and localStorage
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("userId");
-    localStorage.removeItem("browsingMode");
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("browsingMode");
+      localStorage.removeItem("expiresAt");
+      localStorage.removeItem("expiresIn");
+      
+      // Clear token cookie
+      document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
+    }
     
     set({
       token: null,
@@ -112,6 +226,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticated: false,
       emailVerified: false,
       isLoading: false,
+      isHydrated: true,
+      expiresAt: null,
+      expiresIn: null,
     });
 
     console.log('✅ Logged out successfully');
@@ -121,18 +238,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ emailVerified: verified });
   },
 
-  // NEW: Set browsing mode (for HOTEL_OWNER to switch between client/owner)
   setBrowsingMode: (mode: BrowsingMode) => {
     const { role } = get();
-    // Only HOTEL_OWNER can switch modes
     if (role === "HOTEL_OWNER") {
-      localStorage.setItem("browsingMode", mode);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("browsingMode", mode);
+      }
       set({ browsingMode: mode });
       console.log('✅ Browsing mode changed to:', mode);
     }
   },
 
-  // NEW: Check if currently in owner mode
   isOwnerMode: (): boolean => {
     const { role, browsingMode } = get();
     return role === "HOTEL_OWNER" && browsingMode === "OWNER";
@@ -150,18 +266,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.log('🔄 Refreshing access token...');
       const response = await refreshTokenAPI(currentRefreshToken);
       
-      // Update tokens
       const newToken = response.accessToken;
       const newRefreshToken = response.refreshToken;
+      const expiresAt = response.expiresAt;
+      const expiresIn = response.expiresIn;
       
-      localStorage.setItem("token", newToken);
-      if (newRefreshToken) {
-        localStorage.setItem("refreshToken", newRefreshToken);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("token", newToken);
+        if (newRefreshToken) {
+          localStorage.setItem("refreshToken", newRefreshToken);
+        }
+        if (expiresAt) {
+          localStorage.setItem("expiresAt", expiresAt);
+        }
+        if (expiresIn) {
+          localStorage.setItem("expiresIn", String(expiresIn));
+        }
       }
 
-      // Decode new token and update state
       const decoded = jwtDecode<JwtPayload>(newToken);
-      const role = decoded.roles[0]?.replace("ROLE_", "") as UserRole;
+      const role = pickRole(decoded.roles);
 
       set({
         token: newToken,
@@ -170,13 +294,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         userId: decoded.userId,
         role,
         isAuthenticated: true,
+        isHydrated: true,
+        expiresAt: expiresAt || null,
+        expiresIn: expiresIn || null,
       });
 
       console.log('✅ Token refreshed successfully');
       return true;
     } catch (error) {
       console.error('❌ Token refresh failed:', error);
-      // If refresh fails, logout user
       await get().logout();
       return false;
     }
@@ -211,52 +337,78 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-// Hydration hook with automatic token refresh
+// Hydration hook - handles token refresh if needed
 export const useHydrateAuth = () => {
-  const { login, refreshAccessToken, isTokenExpired, logout } = useAuthStore();
+  const { token, refreshToken, refreshAccessToken, logout, isAuthenticated, setHydrated } = useAuthStore();
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      const token = localStorage.getItem("token");
-      const refreshToken = localStorage.getItem("refreshToken");
-      const storedUserId = localStorage.getItem("userId");
-      const userIdFromStorage = storedUserId ? parseInt(storedUserId, 10) : undefined;
-      
-      if (token) {
-        // Check if token is expired
-        try {
-          const decoded = jwtDecode<JwtPayload>(token);
-          const currentTime = Date.now() / 1000;
-          
-          if (decoded.exp < currentTime) {
-            console.log('🔄 Token expired, attempting refresh...');
-            // Token is expired, try to refresh
-            if (refreshToken) {
-              const refreshed = await refreshAccessToken();
-              if (!refreshed) {
-                console.log('❌ Token refresh failed, logging out');
-                await logout();
-              }
-            } else {
-              console.log('❌ No refresh token, logging out');
-              await logout();
+    // Set hydrated on client mount if not already
+    if (typeof window !== 'undefined') {
+      const currentState = useAuthStore.getState();
+      if (!currentState.isHydrated) {
+        // Re-read from localStorage on client
+        const storedToken = localStorage.getItem("token");
+        const storedRefreshToken = localStorage.getItem("refreshToken");
+        const storedUserId = localStorage.getItem("userId");
+        
+        if (storedToken) {
+          try {
+            const decoded = jwtDecode<JwtPayload>(storedToken);
+            const currentTime = Date.now() / 1000;
+            
+            if (decoded.exp >= currentTime) {
+              const role = pickRole(decoded.roles);
+              const savedMode = localStorage.getItem("browsingMode") as BrowsingMode;
+              const browsingMode = (role === "HOTEL_OWNER" && savedMode) ? savedMode : "CLIENT";
+              
+              useAuthStore.setState({
+                token: storedToken,
+                refreshToken: storedRefreshToken,
+                username: decoded.sub,
+                userId: decoded.userId || (storedUserId ? parseInt(storedUserId, 10) : null),
+                role,
+                browsingMode,
+                isAuthenticated: true,
+                isHydrated: true,
+              });
+              console.log('✅ Auth hydrated on client mount');
+              return;
             }
-          } else {
-            // Token is still valid
-            login(token, refreshToken || undefined, userIdFromStorage);
+          } catch (e) {
+            console.error('❌ Token decode error on hydrate:', e);
           }
-        } catch (error) {
-          console.error('❌ Token validation error:', error);
+        }
+        setHydrated(true);
+      }
+    }
+  }, [setHydrated]);
+
+  // Handle expired token refresh
+  useEffect(() => {
+    const handleExpiredToken = async () => {
+      if (!token || isAuthenticated) return;
+      
+      // Token exists but not authenticated = expired token
+      if (refreshToken) {
+        console.log('🔄 Attempting to refresh expired token...');
+        const success = await refreshAccessToken();
+        if (!success) {
+          console.log('❌ Refresh failed, clearing auth');
           await logout();
         }
+      } else {
+        console.log('❌ No refresh token, clearing auth');
+        await logout();
       }
     };
 
-    initializeAuth();
-  }, [login, refreshAccessToken, logout]);
+    handleExpiredToken();
+  }, [token, refreshToken, isAuthenticated, refreshAccessToken, logout]);
 };
 
-// Auto-refresh hook - automatically refresh token before expiry
+// Auto-refresh hook
+// Automatically refreshes the access token when it's about to expire
+// This ensures active users never get interrupted
 export const useAutoRefresh = () => {
   const { isAuthenticated, getTimeUntilExpiry, refreshAccessToken, logout } = useAuthStore();
 
@@ -266,9 +418,12 @@ export const useAutoRefresh = () => {
     const checkAndRefresh = async () => {
       const timeUntilExpiry = getTimeUntilExpiry();
       
-      // Refresh token if it expires in less than 5 minutes (300 seconds)
-      if (timeUntilExpiry > 0 && timeUntilExpiry < 300) {
-        console.log('🔄 Token expiring soon, refreshing...');
+      // Refresh token when less than threshold remaining (from SecurityConfig)
+      // This gives us a buffer before actual expiration
+      const refreshThresholdSeconds = SecurityConfig.jwt.refreshThreshold / 1000;
+      
+      if (timeUntilExpiry > 0 && timeUntilExpiry < refreshThresholdSeconds) {
+        console.log('🔄 Token expiring soon (', Math.floor(timeUntilExpiry), 's remaining), refreshing...');
         const refreshed = await refreshAccessToken();
         if (!refreshed) {
           console.log('❌ Auto-refresh failed, logging out');
@@ -277,12 +432,12 @@ export const useAutoRefresh = () => {
       }
     };
 
-    // Check immediately
+    // Check immediately on mount
     checkAndRefresh();
-
-    // Set up interval to check every minute
+    
+    // Then check every 60 seconds
     const interval = setInterval(checkAndRefresh, 60000);
-
+    
     return () => clearInterval(interval);
   }, [isAuthenticated, getTimeUntilExpiry, refreshAccessToken, logout]);
 };

@@ -4,7 +4,8 @@ export interface HotelSummaryDto {
   id: number;
   name: string;
   category?: string;
-  imageUrl?: string | null;  // allow null
+  imageUrl?: string | null;  // allow null (for backward compatibility)
+  images?: Array<{ id: number; imageUrl: string; displayOrder: number }>;  // new format
   viewersCount: number;
   location?: string;
   stars?: number;            // optional
@@ -21,6 +22,7 @@ export interface HotelDetailInfoDto {
   viewersCount: number;
   starRating?: number;
   stars?: number;
+  averageRating?: number;
   contactInfo?: string;
   policies?: string;
   active?: boolean;

@@ -11,7 +11,7 @@ import {
   IntegrityStatus
 } from "../types/audit";
 
-const API_BASE_URL = "/api";
+import { API_BASE_URL } from "./api";
 
 // Helper to get auth headers
 const getAuthHeaders = (token: string) => ({
@@ -58,17 +58,23 @@ export class AuditService {
     console.log('📋 Fetching audit logs, page:', page, 'size:', size);
     
     const response = await fetch(
-      `${API_BASE_URL}/admin/audit?page=${page}&size=${size}`,
+      `${API_BASE_URL}/audit?skip=${page * size}&take=${size}`,
       { headers: getAuthHeaders(token) }
     );
     
-    return handleResponse<{
-      content: AuditLogEntry[];
-      totalElements: number;
-      totalPages: number;
-      size: number;
-      number: number;
+    const data = await handleResponse<{
+      logs: AuditLogEntry[];
+      total: number;
     }>(response);
+    
+    // Transform to match expected format
+    return {
+      content: data.logs || [],
+      totalElements: data.total || 0,
+      totalPages: Math.ceil((data.total || 0) / size),
+      size,
+      number: page
+    };
   }
 
   // Search audit logs with multiple criteria
@@ -178,7 +184,9 @@ export class AuditService {
       `${API_BASE_URL}/admin/audit/security?hours=${hours}`,
       { headers: getAuthHeaders(token) }
     );
-    return handleResponse<AuditLogEntry[]>(response);
+    // Backend returns a plain array directly
+    const data = await handleResponse<AuditLogEntry[] | { content: AuditLogEntry[] }>(response);
+    return Array.isArray(data) ? data : (data.content || []);
   }
 
   // Get high severity audit logs
@@ -188,7 +196,9 @@ export class AuditService {
       `${API_BASE_URL}/admin/audit/high-severity?hours=${hours}`,
       { headers: getAuthHeaders(token) }
     );
-    return handleResponse<AuditLogEntry[]>(response);
+    // Backend returns a plain array directly
+    const data = await handleResponse<AuditLogEntry[] | { content: AuditLogEntry[] }>(response);
+    return Array.isArray(data) ? data : (data.content || []);
   }
 
   // Get audit log statistics
@@ -280,7 +290,10 @@ export class AuditService {
       `${API_BASE_URL}/admin/audit/suspicious-activity?hours=${hours}&userThreshold=${userThreshold}&actionThreshold=${actionThreshold}`,
       { headers: getAuthHeaders(token) }
     );
-    return handleResponse<SuspiciousActivity[]>(response);
+    const data = await handleResponse<SuspiciousActivity[]>(response);
+    
+    // Return the array directly
+    return Array.isArray(data) ? data : [];
   }
 
   // Check audit log integrity
@@ -293,13 +306,20 @@ export class AuditService {
     const data = await handleResponse<{
       logsWithoutChecksum: number;
       integrityStatus: string;
+      totalLogs?: number;
     }>(response);
-    
+
+    const totalLogs = data.totalLogs || 0;
+    const missing = data.logsWithoutChecksum || 0;
+    const integrityPercentage = totalLogs > 0
+      ? Math.round(((totalLogs - missing) / totalLogs) * 100)
+      : 100;
+
     return {
-      totalLogs: 0, // Will be calculated separately if needed
-      logsWithoutChecksum: data.logsWithoutChecksum,
+      totalLogs,
+      logsWithoutChecksum: missing,
       status: data.integrityStatus,
-      integrityPercentage: 100 // Will be calculated if totalLogs is known
+      integrityPercentage,
     };
   }
 
@@ -361,13 +381,59 @@ export class AuditService {
 
   // Helper method to format audit log entries for display
   static formatAuditLogForDisplay(entry: AuditLogEntry) {
+    // Map backend fields to display format
+    const timestamp = entry.createdAt ? new Date(entry.createdAt).toLocaleString() : 'Invalid Date';
+    const action = entry.action || 'UNKNOWN';
+    const category = this.getCategoryFromAction(action);
+    const severity = this.getSeverityFromAction(action);
+    
     return {
       ...entry,
-      timestamp: new Date(entry.timestamp).toLocaleString(),
-      severityColor: this.getSeverityColor(entry.severity),
-      categoryIcon: this.getCategoryIcon(entry.category),
-      actionDescription: this.getActionDescription(entry.action, entry.resourceType)
+      timestamp,
+      severity,
+      category,
+      severityColor: this.getSeverityColor(severity),
+      categoryIcon: this.getCategoryIcon(category),
+      actionDescription: this.getActionDescription(action, entry.entityType),
+      username: entry.user?.username || 'System'
     };
+  }
+
+  // Helper to determine category from action
+  private static getCategoryFromAction(action: string): string {
+    switch (action) {
+      case 'LOGIN':
+      case 'LOGOUT':
+      case 'REGISTER':
+        return 'AUTHENTICATION';
+      case 'PASSWORD_RESET_REQUEST':
+      case 'PASSWORD_RESET_CONFIRM':
+      case 'EMAIL_VERIFICATION_SEND':
+      case 'EMAIL_VERIFICATION_CONFIRM':
+      case 'ACCOUNT_LOCKED':
+      case 'ACCOUNT_UNLOCKED':
+        return 'SECURITY';
+      case 'CREATE':
+      case 'UPDATE':
+      case 'DELETE':
+        return 'DATA_CHANGE';
+      default:
+        return 'SYSTEM';
+    }
+  }
+
+  // Helper to determine severity from action
+  private static getSeverityFromAction(action: string): string {
+    switch (action) {
+      case 'DELETE':
+      case 'ACCOUNT_LOCKED':
+        return 'WARN';
+      case 'LOGIN':
+      case 'LOGOUT':
+        return 'INFO';
+      default:
+        return 'INFO';
+    }
   }
 
   // Helper method to get severity color for UI
@@ -395,8 +461,8 @@ export class AuditService {
   }
 
   // Helper method to get human-readable action description
-  private static getActionDescription(action: string, resourceType?: string): string {
-    const resource = resourceType ? resourceType.toLowerCase() : 'resource';
+  private static getActionDescription(action: string, entityType?: string): string {
+    const resource = entityType ? entityType.toLowerCase() : 'resource';
     
     switch (action) {
       case 'CREATE': return `Created ${resource}`;
@@ -422,27 +488,38 @@ export class AuditService {
   static exportToCsv(auditLogs: AuditLogEntry[], filename: string = 'audit-logs.csv') {
     const headers = [
       'ID', 'User ID', 'Username', 'Action', 'Resource Type', 'Resource ID',
-      'IP Address', 'Timestamp', 'Severity', 'Category', 'Description'
+      'IP Address', 'Timestamp', 'Severity', 'Category', 'Status', 'Error Message', 'Changes'
     ];
 
     const csvContent = [
       headers.join(','),
-      ...auditLogs.map(log => [
-        log.id,
-        log.userId || '',
-        log.username || '',
-        log.action,
-        log.resourceType || '',
-        log.resourceId || '',
-        log.ipAddress,
-        log.timestamp,
-        log.severity,
-        log.category,
-        `"${(log.description || '').replace(/"/g, '""')}"`
-      ].join(','))
+      ...auditLogs.map(log => {
+        const username = log.username || log.user?.username || '';
+        const category = log.category || AuditService.getCategoryFromActionPublic(log.action);
+        const severity = log.severity || AuditService.getSeverityFromActionPublic(log.action);
+        const timestamp = log.createdAt ? new Date(log.createdAt).toLocaleString() : (log.timestamp || '');
+        const changes = log.changes ? `"${log.changes.replace(/"/g, '""')}"` : '';
+        const errorMsg = log.errorMessage ? `"${log.errorMessage.replace(/"/g, '""')}"` : '';
+
+        return [
+          log.id,
+          log.userId || '',
+          username,
+          log.action,
+          log.entityType || '',
+          log.entityId || '',
+          log.ipAddress || '',
+          timestamp,
+          severity,
+          category,
+          log.status || '',
+          errorMsg,
+          changes,
+        ].join(',');
+      })
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
@@ -451,5 +528,14 @@ export class AuditService {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  }
+
+  // Public wrappers for use in exportToCsv
+  static getCategoryFromActionPublic(action: string): string {
+    return AuditService['getCategoryFromAction'](action);
+  }
+
+  static getSeverityFromActionPublic(action: string): string {
+    return AuditService['getSeverityFromAction'](action);
   }
 }

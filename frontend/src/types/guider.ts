@@ -2,10 +2,12 @@
 
 export interface LanguageGuiderDto {
   id: number;
-  fullName: string;
+  name?: string;
+  fullName?: string;
   contactInfo: string;
   languages: string[];
   active: boolean;
+  experience?: string;
   tourismPlaceId?: number;
   tourismPlaceName?: string;
 }

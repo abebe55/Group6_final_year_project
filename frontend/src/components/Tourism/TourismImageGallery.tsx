@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import { TourismImageDto } from "@/types/tourismImage";
 import { getTourismImages } from "@/services/tourismImage.service";
 import Image from "next/image";
+import { getImageUrl } from "@/utils/imageUrl";
 
 interface TourismImageGalleryProps {
   tourismId: number;
   tourismName: string;
   isOpen: boolean;
   onClose: () => void;
+  // Optional: pass images directly to avoid API call
+  preloadedImages?: TourismImageDto[];
 }
 
 export default function TourismImageGallery({
@@ -17,6 +20,7 @@ export default function TourismImageGallery({
   tourismName,
   isOpen,
   onClose,
+  preloadedImages,
 }: TourismImageGalleryProps) {
   const [images, setImages] = useState<TourismImageDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,19 +32,34 @@ export default function TourismImageGallery({
     if (isOpen && tourismId) {
       loadImages();
     }
-  }, [isOpen, tourismId]);
+  }, [isOpen, tourismId, preloadedImages]);
 
   const loadImages = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log(`Loading internal images for tourism ${tourismId}...`);
+      
+      // If preloaded images are provided, use them directly
+      if (preloadedImages && preloadedImages.length > 0) {
+        console.log(`Using ${preloadedImages.length} preloaded images with details`);
+        setImages(preloadedImages);
+        setSelectedImage(preloadedImages[0]);
+        setCurrentIndex(0);
+        setLoading(false);
+        return;
+      }
+      
+      // Otherwise, try to fetch from API
+      console.log(`Loading images from API for tourism ${tourismId}...`);
       const data = await getTourismImages(tourismId);
-      console.log(`Received ${data.length} images:`, data);
-      setImages(data);
+      console.log(`Received ${data.length} images from API:`, data);
+      
       if (data.length > 0) {
+        setImages(data);
         setSelectedImage(data[0]);
         setCurrentIndex(0);
+      } else {
+        setImages([]);
       }
     } catch (err) {
       setError("Failed to load images");
@@ -91,9 +110,9 @@ export default function TourismImageGallery({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">📸 {tourismName}</h2>
+            <h2 className="text-xl font-bold text-gray-900">{tourismName}</h2>
             <p className="text-sm text-gray-600">
-              {images.length} internal images • {selectedImage?.title || `Image ${currentIndex + 1}`}
+              {images.length} images • {selectedImage?.title || `Image ${currentIndex + 1}`}
             </p>
           </div>
           <button
@@ -127,15 +146,16 @@ export default function TourismImageGallery({
               </div>
             ) : images.length === 0 ? (
               <div className="text-center text-white p-8">
-                <span className="text-6xl mb-4 block">📷</span>
-                <h3 className="text-xl font-medium mb-2">No Internal Images Yet</h3>
-                <p className="text-gray-400 mb-4">This tourism place doesn't have any internal/detailed images uploaded yet.</p>
-                <p className="text-gray-500 text-sm">Internal images show different areas, rooms, or features within the tourism place.</p>
+                <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                </div>
+                <h3 className="text-xl font-medium mb-2">No Images Yet</h3>
+                <p className="text-gray-400 mb-4">This tourism place doesn't have any images uploaded yet.</p>
               </div>
             ) : selectedImage ? (
               <>
                 <Image
-                  src={selectedImage.imageUrl}
+                  src={getImageUrl(selectedImage.imageUrl)}
                   alt={selectedImage.title || `Image ${currentIndex + 1}`}
                   fill
                   className="object-contain"
@@ -164,17 +184,18 @@ export default function TourismImageGallery({
                   </>
                 )}
 
-                {/* Image Info Overlay */}
-                {(selectedImage.title || selectedImage.description) && (
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                    {selectedImage.title && (
-                      <h3 className="text-xl font-bold text-white mb-1">{selectedImage.title}</h3>
-                    )}
-                    {selectedImage.description && (
-                      <p className="text-gray-300 text-sm">{selectedImage.description}</p>
-                    )}
-                  </div>
-                )}
+                {/* Image Info Overlay - Shows title and description */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                  {selectedImage.title && (
+                    <h3 className="text-xl font-bold text-white mb-1">{selectedImage.title}</h3>
+                  )}
+                  {selectedImage.description && (
+                    <p className="text-gray-300 text-sm">{selectedImage.description}</p>
+                  )}
+                  {!selectedImage.title && !selectedImage.description && (
+                    <p className="text-gray-400 text-sm">Image {currentIndex + 1} of {images.length}</p>
+                  )}
+                </div>
 
                 {/* Image Counter */}
                 <div className="absolute top-4 right-4 px-3 py-1 bg-black/50 text-white rounded-full text-sm">
@@ -197,9 +218,10 @@ export default function TourismImageGallery({
                         ? "border-emerald-500 ring-2 ring-emerald-500/50"
                         : "border-transparent hover:border-gray-300"
                     }`}
+                    title={image.title || `Image ${index + 1}`}
                   >
                     <Image
-                      src={image.imageUrl}
+                      src={getImageUrl(image.imageUrl)}
                       alt={image.title || `Thumbnail ${index + 1}`}
                       fill
                       className="object-cover"
